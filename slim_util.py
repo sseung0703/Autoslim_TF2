@@ -14,7 +14,7 @@ def set_width(model, width_list):
                 model.Layers[k.replace('conv', 'bn')].out_depth = in_width
         elif 'conv2' in k:
             if '0/conv2' in k:
-                width = ceil(width_list[w_num] * layer.kernel.shape[3])
+                width = width_list[w_num]
                 group_width = width
                 w_num += 1
 
@@ -25,7 +25,7 @@ def set_width(model, width_list):
             in_width = group_width
 
         elif 'conv' in k:
-            width = ceil(width_list[w_num] * layer.kernel.shape[3])
+            width = width_list[w_num]
             if layer.type == 'input':
                 layer.out_depth = width
             else:
@@ -258,6 +258,7 @@ def Greedly_search(args, model, val_ds, test_step, test_accuracy, test_loss):
         model(np.zeros([1]+list(test_images.shape[1:]), dtype=np.float32), training = False)
 
         p, f = check_complexity(model)
+        p, f = p.numpy(), f.numpy() 
         print ('Ori Acc.: %.2f, Current Acc.: %.2f'%(100*ori_acc, 100*max(accuracy_list)))
         print ('Ori params: %.4fM, Slim params: %.4fM, Ori FLOPS: %.4fM, Slim FLOPS: %.4fM'%(ori_p/1e6, p/1e6, ori_f/1e6, f/1e6))
         if f/ori_f < args.target_rate:
