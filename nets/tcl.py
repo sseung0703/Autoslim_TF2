@@ -52,19 +52,21 @@ class Conv2d(tf.keras.layers.Layer):
         kernel = self.kernel
         kh,kw,Di,Do = kernel.shape
 
-        if getattr(self, 'in_depth', Di) != Di:
-            Di = self.in_depth
-            kernel = tf.slice(kernel, [0,0,0,0], [-1,-1,self.in_depth,-1])
-        if getattr(self, 'out_depth', Do) != Do:
-            Do = self.out_depth
-            kernel = tf.slice(kernel, [0,0,0,0], [-1,-1,-1,self.out_depth])
+        if getattr(self, 'in_depth', 1.) < 1.:
+            Di = tf.cast(tf.math.ceil(Di * getattr(self, 'in_depth')), tf.int32)
+            kernel = tf.slice(kernel, [0,0,0,0], [-1,-1,Di,-1])
+       
+        if getattr(self, 'out_depth', 1.) < 1.:
+            Do = tf.cast(tf.math.ceil(Do * getattr(self, 'out_depth')), tf.int32)
+            kernel = tf.slice(kernel, [0,0,0,0], [-1,-1,-1,Do])
 
         conv = tf.nn.conv2d(input, kernel, self.strides, self.padding,
                             dilations=self.dilations, name=None)
         if self.use_biases:
             biases = self.biases
-            if getattr(self, 'out_depth', Do) != Do:
-                biases = tf.slice(biases, [0,0,0,0], [-1,-1,-1,Do])
+            if getattr(self, 'out_depth', 1.) < 1.:
+                biases = tf.slice(kernel, [0,0,0,0], [-1,-1,-1,Do])
+
             conv += biases
         if self.activation_fn:
             conv = self.activation_fn(conv)
@@ -122,13 +124,15 @@ class DepthwiseConv2d(tf.keras.layers.Layer):
         kernel = self.kernel
         kh,kw,Di,Do = kernel.shape
 
-        if getattr(self, 'in_depth', Di) != Di:
-            Di = self.in_depth
+
+        if getattr(self, 'in_depth', 1.) < 1.:
+            Di = tf.cast(tf.math.ceil(Di * getattr(self, 'in_depth')), tf.int32)
             kernel = tf.slice(kernel, [0,0,0,0], [-1,-1,Di,-1])
+
         conv = tf.nn.depthwise_conv2d(input, kernel, strides = self.strides, padding = self.padding, dilations=self.dilations)
         if self.use_biases:
             biases = self.biases
-            if getattr(self, 'in_depth', Di) != Di:
+            if getattr(self, 'in_depth', 1.) < 1.:
                 biases = tf.slice(biases, [0,0,0,0], [-1,-1,-1,Di])
             conv += biases
         if self.activation_fn:
@@ -179,8 +183,8 @@ class FC(tf.keras.layers.Layer):
         kernel = self.kernel
         Di,Do = kernel.shape
 
-        if getattr(self, 'in_depth', Di) != Di:
-            Di = self.in_depth
+        if getattr(self, 'in_depth', 1.) < 1.:
+            Di = tf.cast(tf.math.ceil(Di * getattr(self, 'in_depth')), tf.int32)
             kernel = tf.slice(kernel, [0,0], [Di,-1])
 
         fc = tf.matmul(input, kernel)
@@ -261,11 +265,10 @@ class BatchNorm(tf.keras.layers.Layer):
 
     def EMA(self, variable, value):
         Do = variable.shape[-1]
-        if getattr(self, 'out_depth', Do) != Do:
+        if variable.shape[-1] != value.shape[-1]:
             variable_ = tf.squeeze(variable)
-            Do = self.out_depth
+            Do = tf.math.ceil(Do * self.out_depth)
             mask = tf.slice(self.mask, [0],[Do])
-
             update_delta = (tf.gather(variable_, mask) - tf.squeeze(value)) * (1-self.alpha)
             variable.assign(tf.reshape(tf.tensor_scatter_nd_sub(variable_, tf.expand_dims(mask,1), update_delta),[1,1,1,-1]))
         else:
@@ -283,9 +286,9 @@ class BatchNorm(tf.keras.layers.Layer):
             mean = self.moving_mean
             std = self.moving_std
         gamma, beta = self.gamma, self.beta
-        
-        if getattr(self, 'out_depth', Do) != Do:
-            Do = self.out_depth
+
+        if getattr(self, 'out_depth', 1.) < 1.:
+            Do = tf.cast(tf.math.ceil(Do * getattr(self, 'out_depth')), tf.int32)
             if not(training):
                 mean = tf.slice(mean, [0,0,0,0], [-1,-1,-1,Do])
                 std = tf.slice(std, [0,0,0,0], [-1,-1,-1,Do])

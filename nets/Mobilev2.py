@@ -57,7 +57,11 @@ class Model(tf.keras.Model):
     def call(self, x, training=None):
         x = self.Layers['conv'](x)
         x = self.Layers['bn'](x, training = training)
-        x = tf.nn.relu6(x)
+        x = tf.nn.relu6(x)        
+
+        ## Source codes are fixed. If you want to confirm network is training with various width, uncomments below line.
+        #tf.print(getattr(self.Layers['conv'], 'out_depth', 1.))
+
         for i, (t, c, n, s) in enumerate(self.setting):
             for j in range(n):
                 name = 'InvertedResidual_%d_%d/'%(i,j)

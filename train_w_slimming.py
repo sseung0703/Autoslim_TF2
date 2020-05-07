@@ -150,7 +150,7 @@ if __name__ == '__main__':
         init_epoch = 0
         if args.slimmable:
             ## Warm-up training
-            slim_util.Warm_up(args, train_step, ceil(args.train_epoch *.3), datasets['train_sub'], train_loss, train_accuracy,  
+            slim_util.Warm_up(args, model, train_step, ceil(args.train_epoch *.3), datasets['train_sub'], train_loss, train_accuracy,  
                               validation, test_step, datasets['val'], test_loss, test_accuracy)
             ## Greed search
             ori_p, ori_f, p, f = slim_util.Greedly_search(args, model, datasets['val'], test_step, test_accuracy, test_loss)

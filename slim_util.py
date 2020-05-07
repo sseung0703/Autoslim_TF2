@@ -206,7 +206,7 @@ def assign_slimmed_param(model, new_param, trainable = False):
                 delattr(layer, 'biases')
                 setattr(layer, 'biases', tf.Variable(biases, trainable = trainable, name =  model_name + k + '/biases'))
                 
-def Warm_up(args, train_step, training_epoch, train_sub_ds, train_loss, train_accuracy,
+def Warm_up(args, model, train_step, training_epoch, train_sub_ds, train_loss, train_accuracy,
             validation, test_step, val_ds, test_loss, test_accuracy):
     step = 0
     train_time = time.time()
@@ -224,7 +224,6 @@ def Warm_up(args, train_step, training_epoch, train_sub_ds, train_loss, train_ac
                    train_loss, train_accuracy, epoch = epoch, bn_statistics_update = True)
 
         train_time += time.time() - val_time
-        
         
 def Greedly_search(args, model, val_ds, test_step, test_accuracy, test_loss):
     width_list = [1.0 for k in model.Layers.keys() if 'conv' in k and 'conv1' not in k and 'conv2' not in k]
