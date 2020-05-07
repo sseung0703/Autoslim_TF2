@@ -160,6 +160,7 @@ def actual_slimming(model, width_list, path):
             params[k + '/biases:0'] = biases
 
     sio.savemat(path+'/slimmed_params.mat', params)
+    return params
 
 def assign_slimmed_param(model, new_param, trainable = False):
     model_name = model.variables[0].name.split('/')[0] + '/'
@@ -240,18 +241,18 @@ def Greedly_search(args, model, val_ds, test_step, test_accuracy, test_loss):
     while(True):
         accuracy_list = []
         for i in range(len(width_list)):
-            if width_list[i] > .2:
-                width_list[i] -= .2
+            if width_list[i] > args.search_step:
+                width_list[i] -= args.search_step
                 for test_images, test_labels in val_ds:
                     test_step(test_images, test_labels, width_list = width_list, bn_statistics_update = True)
                 accuracy_list.append(test_accuracy.result().numpy())
                 test_loss.reset_states()
                 test_accuracy.reset_states()
-                width_list[i] += .2
+                width_list[i] += args.search_step
             else:
                 accuracy_list.append(0.)
-        idx = np.argmax(np.where(np.array(width_list) > .2, accuracy_list, 0.))
-        width_list[idx] -= .2
+        idx = np.argmax(np.where(np.array(width_list) > args.minimum_rate, accuracy_list, 0.))
+        width_list[idx] -= args.search_step
         width_list = [round(w*10)/10 for w in width_list]
         print (width_list, idx)
         set_width(model, width_list)
@@ -260,11 +261,10 @@ def Greedly_search(args, model, val_ds, test_step, test_accuracy, test_loss):
         p, f = check_complexity(model)
         print ('Ori Acc.: %.2f, Current Acc.: %.2f'%(100*ori_acc, 100*max(accuracy_list)))
         print ('Ori params: %.4fM, Slim params: %.4fM, Ori FLOPS: %.4fM, Slim FLOPS: %.4fM'%(ori_p/1e6, p/1e6, ori_f/1e6, f/1e6))
-        if f/ori_f < .5:
+        if f/ori_f < args.target_rate:
             break 
-    actual_slimming(model, width_list, args.train_path)
-    trained = sio.loadmat(args.train_path + '/slimmed_params.mat')
-    assign_slimmed_param(model, trained, trainable = True)
+    slimmed_param = actual_slimming(model, width_list, args.train_path)
+    assign_slimmed_param(model, slimmed_param, trainable = True)
     clear_width(model)
     return ori_p, ori_f, p, f
 

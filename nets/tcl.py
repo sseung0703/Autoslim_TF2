@@ -1,5 +1,5 @@
 import tensorflow as tf
-from math import ceil
+
 def arg_scope(func):
     def func_with_args(self, *args, **kwargs):
         if hasattr(self, 'pre_defined'):
@@ -63,9 +63,8 @@ class Conv2d(tf.keras.layers.Layer):
                             dilations=self.dilations, name=None)
         if self.use_biases:
             biases = self.biases
-            if hasattr(self, 'out_depth'):
-                out_depth = tf.math.ceil(kernel.shape[3] * self.out_depth)
-                biases = tf.slice(biases, [0,0,0,0], [-1,-1,-1,out_depth])
+            if getattr(self, 'out_depth', Do) != Do:
+                biases = tf.slice(biases, [0,0,0,0], [-1,-1,-1,Do])
             conv += biases
         if self.activation_fn:
             conv = self.activation_fn(conv)
@@ -130,7 +129,6 @@ class DepthwiseConv2d(tf.keras.layers.Layer):
         if self.use_biases:
             biases = self.biases
             if getattr(self, 'in_depth', Di) != Di:
-                Di = in_depth
                 biases = tf.slice(biases, [0,0,0,0], [-1,-1,-1,Di])
             conv += biases
         if self.activation_fn:
@@ -146,66 +144,6 @@ class DepthwiseConv2d(tf.keras.layers.Layer):
 
         return conv
 
-class Conv2d_transpose(tf.keras.layers.Layer):
-    @arg_scope
-    def __init__(self, kernel_size, num_outputs, strides = 1, dilations = 1, padding = 'SAME',
-                 kernel_initializer = tf.keras.initializers.VarianceScaling(scale = 2., mode='fan_out'),
-                 kernel_regularizer = None,
-                 use_biases = True,
-                 biases_initializer  = tf.keras.initializers.Zeros(),
-                 biases_regularizer = None,
-                 activation_fn = tf.nn.relu,
-                 name = 'conv',
-                 trainable = True,
-                 **kwargs):
-        super(Conv2d_transpose, self).__init__(name = name, **kwargs)
-        
-        self.kernel_size = kernel_size
-        self.num_outputs = num_outputs
-        self.strides = strides
-        self.padding = padding
-        self.dilations = dilations
-        self.kernel_initializer = kernel_initializer
-        self.kernel_regularizer = kernel_regularizer
-        
-        self.use_biases = use_biases
-        self.biases_initializer = biases_initializer
-        self.biases_regularizer = biases_regularizer
-        
-        self.activation_fn = activation_fn
-
-        self.trainable = trainable
-        
-    def build(self, input_shape):
-        super(Conv2d_transpose, self).build(input_shape)
-        self.kernel = self.add_weight(name  = 'kernel', 
-                                      shape = self.kernel_size + [self.num_outputs, input_shape[-1]],
-                                      initializer=self.kernel_initializer,
-                                      regularizer=self.kernel_regularizer,
-                                      trainable = self.trainable)
-        if self.use_biases:
-            self.biases  = self.add_weight(name = "biases",
-                                           shape=[1,1,1,self.num_outputs],
-                                           initializer = self.biases_initializer,
-                                           regularizer = self.biases_regularizer,
-                                           trainable = self.trainable)
-        
-    def call(self, input):
-        if self.padding == 'SAME':
-            H = input.shape[1]*self.strides
-            W = input.shape[2]*self.strides
-        elif self.padding == 'VALID':
-            H = (input.shape[1]-1)*self.strides + self.kernel_size[0]
-            W = (input.shape[2]-1)*self.strides + self.kernel_size[1]
-        output_shape = [input.shape[0], H, W, self.num_outputs]
-        conv = tf.nn.conv2d_transpose(input, self.kernel, output_shape, self.strides, self.padding,
-                            dilations=self.dilations, name=None)
-        if self.use_biases:
-            conv += self.biases
-        if self.activation_fn:
-            conv = self.activation_fn(conv)
-        return conv
-  
 class FC(tf.keras.layers.Layer):
     @arg_scope
     def __init__(self, num_outputs, 
@@ -344,14 +282,13 @@ class BatchNorm(tf.keras.layers.Layer):
         else:
             mean = self.moving_mean
             std = self.moving_std
-
         gamma, beta = self.gamma, self.beta
+        
         if getattr(self, 'out_depth', Do) != Do:
             Do = self.out_depth
             if not(training):
                 mean = tf.slice(mean, [0,0,0,0], [-1,-1,-1,Do])
                 std = tf.slice(std, [0,0,0,0], [-1,-1,-1,Do])
-
             gamma = tf.slice(self.gamma, [0,0,0,0], [-1,-1,-1,Do])
             beta = tf.slice(self.beta, [0,0,0,0], [-1,-1,-1,Do])
 
@@ -366,19 +303,3 @@ class BatchNorm(tf.keras.layers.Layer):
             self.flops *= n 
 
         return bn
-
-class Dropout(tf.keras.layers.Layer):
-    @arg_scope
-    def __init__(self, keep_prob = 0.5):
-        super(Dropout, self).__init__()
-        
-        self.keep_prob = keep_prob
-
-    def call(self, input, training = False):
-        if training:
-            noise = tf.keras.backend.random_uniform(input.shape, minval=-1., maxval=0.) + self.keep_prob
-            mask = noise >= 0.
-            input = tf.where(mask, input, tf.zeros_like(input))
- 
-        return input
-

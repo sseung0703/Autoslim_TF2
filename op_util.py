@@ -1,7 +1,7 @@
 import tensorflow as tf
 import numpy as np
 import slim_util
-from math import ceil
+
 def Optimizer(model, weight_decay, LR):
     with tf.name_scope('Optimizer_w_Distillation'):
         loss_object = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
@@ -37,7 +37,7 @@ def Optimizer(model, weight_decay, LR):
         test_accuracy.update_state(labels, predictions)
     return training, train_loss, train_accuracy, validation, test_loss, test_accuracy
 
-def Slimmable_optimizer(model, weight_decay, LR):
+def Slimmable_optimizer(model, weight_decay, LR, min_rate):
     with tf.name_scope('Optimizer_w_Distillation'):
         loss_object = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
         optimizer = tf.keras.optimizers.SGD(LR, .9, nesterov=True)
@@ -75,18 +75,18 @@ def Slimmable_optimizer(model, weight_decay, LR):
 
         return total_loss, predictions
 
-
     @tf.function
     def training(images, labels):
         with tf.GradientTape() as tape:
             total_loss, predictions = forward(images, labels)
             n = 4
-            width_list = np.random.uniform(low = .2, high = 1., size = n-2).tolist() + [.2]
+            width_list = np.random.uniform(low = min_rate, high = 1., size = n-2).tolist() + [min_rate]
             width_list.sort()
             width_list = [[tf.convert_to_tensor(w)] for w in width_list]
             for i in range(len(width_list)//2):
                 width_list[i] += width_list[-1]
                 del width_list[-1]
+                
             # Run multiple sub-network in parallel to maximize GPU usage rate.
             inplace_distillation = tf.stop_gradient(predictions)
             for width in width_list:
@@ -137,8 +137,6 @@ class PiecewiseConstantDecay(tf.optimizers.schedules.LearningRateSchedule):
     def __call__(self, step):
         from tensorflow.python.framework import ops
         with tf.name_scope(self.name or "PiecewiseConstant"):
-            boundaries = ops.convert_n_to_tensor(self.boundaries)
-            values = ops.convert_n_to_tensor(self.values)
             x_recomp = ops.convert_to_tensor(step)
 
             lr  = self.values[0] * tf.cast( x_recomp < self.boundaries[0], tf.float32)

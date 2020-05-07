@@ -9,7 +9,6 @@ import op_util, slim_util
 from nets import WResNet, VGG, ResNet, Mobilev2
 from math import ceil
 
-
 home_path = os.path.dirname(os.path.abspath(__file__))
 parser = argparse.ArgumentParser(description='')
 
@@ -27,7 +26,9 @@ parser.add_argument("--val_batch_size", default=2000, type=int)
 parser.add_argument("--train_epoch", default=200, type=int)
 
 parser.add_argument("--slimmable", default=False, type=bool)
-parser.add_argument("--trained_param", default=None, type=str)
+parser.add_argument("--target_rate", default=.5, type=float)
+parser.add_argument("--search_step", default=.2, type=float)
+parser.add_argument("--minimum_rate", default=.2, type=float)
 
 parser.add_argument("--gpu_id", default=0, type=int)
 parser.add_argument("--do_log", default=100, type=int)
@@ -43,10 +44,10 @@ def validation(test_step, test_ds, test_loss, test_accuracy,
             test_step(test_images, test_labels)
 
     if logs == None:
-        tf.summary.scalar('Pretrain/Categorical_loss/train', train_loss.result(), step=epoch+1)
-        tf.summary.scalar('Pretrain/Categorical_loss/test', test_loss.result(), step=epoch+1)
-        tf.summary.scalar('Pretrain/Accuracy/train', train_accuracy.result()*100, step=epoch+1)
-        tf.summary.scalar('Pretrain/Accuracy/test', test_accuracy.result()*100, step=epoch+1)
+        tf.summary.scalar('Warmup/Categorical_loss/train', train_loss.result(), step=epoch+1)
+        tf.summary.scalar('Warmup/Categorical_loss/test', test_loss.result(), step=epoch+1)
+        tf.summary.scalar('Warmup/Accuracy/train', train_accuracy.result()*100, step=epoch+1)
+        tf.summary.scalar('Warmup/Accuracy/test', test_accuracy.result()*100, step=epoch+1)
 
         template = 'Epoch: {0:3d}, train_loss: {1:0.4f}, train_Acc.: {2:2.2f}, val loss: {3:0.4f}, val_Acc.: {4:2.2f}'
         print (template.format(epoch+1, train_loss.result(), train_accuracy.result()*100,
@@ -91,7 +92,7 @@ def build_dataset_proviers(train_images, train_labels, val_images, val_labels, p
         val_ds = val_ds.map(pre_processing(is_training = False), num_parallel_calls=tf.data.experimental.AUTOTUNE)
         val_ds = val_ds.batch(args.val_batch_size)
         val_ds = val_ds.cache().prefetch(tf.data.experimental.AUTOTUNE)
-        return {'train': train_ds, 'test': test_ds, 'train_ds': train_sub_ds, 'val': val_ds}
+        return {'train': train_ds, 'test': test_ds, 'train_sub': train_sub_ds, 'val': val_ds}
     return {'train': train_ds, 'test': test_ds}
 
 if __name__ == '__main__':
@@ -127,16 +128,16 @@ if __name__ == '__main__':
                                                             args.decay_rate, staircase=True)
     else:
         if isinstance(args.decay_points[0], float):
-            args.decay_points = [int(dp*args.train_epoch) + ceil(60*args.slimmable*.8) for dp in args.decay_points]
+            args.decay_points = [int(dp*args.train_epoch) for dp in args.decay_points]
         LR = op_util.PiecewiseConstantDecay([dp*cardinality for dp in args.decay_points],
                                             [args.learning_rate * args.decay_rate ** i for  i in range(len(args.decay_points)+1)])
 
     if args.slimmable:
-        Opt = op_util.Slimmable_optimizer
+        train_step, train_loss, train_accuracy,\
+        test_step,  test_loss,  test_accuracy = op_util.Slimmable_optimizer(model, args.weight_decay, args.learning_rate, args.minimum_rate)
     else:
-        Opt = op_util.Optimizer
-    train_step, train_loss, train_accuracy,\
-    test_step,  test_loss,  test_accuracy = Opt(model, args.weight_decay, LR)
+        train_step, train_loss, train_accuracy,\
+        test_step,  test_loss,  test_accuracy = op_util.Optimizer(model, args.weight_decay, LR)
 
     model(np.zeros([1]+list(train_images.shape[1:]), dtype=np.float32), training = False)
 
@@ -158,6 +159,7 @@ if __name__ == '__main__':
             train_step, train_loss, train_accuracy,\
             test_step,  test_loss,  test_accuracy = op_util.Optimizer(model, args.weight_decay, LR)
 
+        ## Conventional training routine
         for epoch in range(init_epoch, init_epoch + args.train_epoch):
             for images, labels in datasets['train']:
                 lr = train_step(images, labels)
