@@ -17,6 +17,14 @@ We study how to set channel numbers in a neural network to achieve better accura
 ## Run
 - Run train_w_slimming.py with slimmable = True
 
+## Experimental results
+- I only use CIFAR10 dataset due to my low hardware performance.
+- All the training configuration is probably not optimal.
+
+### MobileNet-v2 (will be uploaded soon)
+- Table and Plots...
+- Comparing original and slimmed networks' layer depths via Box plot.
+
 ## Reference
 ```
 @article{yu2019autoslim,
