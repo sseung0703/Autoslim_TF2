@@ -15,8 +15,9 @@ We study how to set channel numbers in a neural network to achieve better accura
 - Scipy
 
 ## Run
-- Run train_w_slimming.py with slimmable = True
-
+```
+python train_w_slimming.py --slimmable True
+```
 ## Experimental results
 - I only use CIFAR10 dataset due to my low hardware performance.
 - All the training configuration is probably not optimal.
