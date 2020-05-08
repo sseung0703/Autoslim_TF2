@@ -264,24 +264,17 @@ class BatchNorm(tf.keras.layers.Layer):
         self.mask = tf.range(input_shape[-1])
 
     def EMA(self, variable, value):
-        Do = variable.shape[-1]
-        if variable.shape[-1] != value.shape[-1]:
-            variable_ = tf.squeeze(variable)
-            Do = tf.math.ceil(Do * self.out_depth)
-            mask = tf.slice(self.mask, [0],[Do])
-            update_delta = (tf.gather(variable_, mask) - tf.squeeze(value)) * (1-self.alpha)
-            variable.assign(tf.reshape(tf.tensor_scatter_nd_sub(variable_, tf.expand_dims(mask,1), update_delta),[1,1,1,-1]))
-        else:
-            update_delta = (variable - value) * (1-self.alpha)
-            variable.assign(variable-update_delta)
+        update_delta = (variable - value) * (1-self.alpha)
+        variable.assign(variable-update_delta)
         
     def call(self, input, training=None):
         Do = self.moving_mean.shape[-1]
         if training:
             mean, var = tf.nn.moments(input, list(range(len(input.shape)-1)), keepdims=True)
             std = tf.sqrt(var + self.epsilon)
-            self.EMA(self.moving_mean, mean)
-            self.EMA(self.moving_std, std)
+            if self.moving_mean.shape[-1] == mean.shape[-1]:
+                self.EMA(self.moving_mean, mean)
+                self.EMA(self.moving_std, std)
         else:
             mean = self.moving_mean
             std = self.moving_std

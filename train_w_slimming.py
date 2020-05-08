@@ -110,25 +110,24 @@ if __name__ == '__main__':
     if 'WResNet' in args.arch:
         arch = [int(a) for a in args.arch.split('-')[1:]]
         model = WResNet.Model(architecture=arch, num_class = np.max(train_labels)+1,
-                                      name = 'Student', trainable = True)
+                              name = 'Student', trainable = True)
     elif 'VGG' in args.arch:
         model = VGG.Model(num_class = np.max(train_labels)+1,
-                                  name = 'Student', trainable = True)
+                          name = 'Student', trainable = True)
     elif 'ResNet' in args.arch:
         arch = int(args.arch.split('-')[1])
         model = ResNet.Model(num_layer=arch, num_class = np.max(train_labels)+1,
-                                  name = 'Student', trainable = True)
+                             name = 'Student', trainable = True)
     elif 'Mobilev2' in args.arch:
         model = Mobilev2.Model(num_class = np.max(train_labels)+1, width_mul = 1.0 if args.slimmable else 1.0,
-                                       name = 'Student', trainable = True)
+                               name = 'Student', trainable = True)
 
     cardinality = tf.data.experimental.cardinality(datasets['train']).numpy()
     if args.decay_points is None:
         LR = tf.keras.optimizers.schedules.ExponentialDecay(args.learning_rate, cardinality,
                                                             args.decay_rate, staircase=True)
     else:
-        if isinstance(args.decay_points[0], float):
-            args.decay_points = [int(dp*args.train_epoch) for dp in args.decay_points]
+        args.decay_points = [int(dp*args.train_epoch) if dp < 1 else int(dp) for dp in args.decay_points]
         LR = op_util.PiecewiseConstantDecay([dp*cardinality for dp in args.decay_points],
                                             [args.learning_rate * args.decay_rate ** i for  i in range(len(args.decay_points)+1)])
 
@@ -141,7 +140,6 @@ if __name__ == '__main__':
 
     model(np.zeros([1]+list(train_images.shape[1:]), dtype=np.float32), training = False)
 
-
     with summary_writer.as_default():
         step = 0
         logs = {'training_acc' : [], 'validation_acc' : []}
@@ -150,8 +148,8 @@ if __name__ == '__main__':
         init_epoch = 0
         if args.slimmable:
             ## Warm-up training
-            slim_util.Warm_up(args, model, train_step, ceil(args.train_epoch *.3), datasets['train_sub'], train_loss, train_accuracy,  
-                              validation, test_step, datasets['val'], test_loss, test_accuracy)
+            slim_util.Warm_up(args, model, train_step, ceil(args.train_epoch *.3), datasets['train_sub'], 
+                              train_loss, train_accuracy, validation, test_step, datasets['val'], test_loss, test_accuracy)
             ## Greed search
             ori_p, ori_f, p, f = slim_util.Greedly_search(args, model, datasets['val'], test_step, test_accuracy, test_loss)
 

@@ -12,6 +12,7 @@ def Optimizer(model, weight_decay, LR):
         test_loss = tf.keras.metrics.Mean(name='test_loss')
         test_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(name='test_accuracy')
         
+    ## Experimental compiling is not available on Windows. If your OS is Windows, use "@tf.function" only
     @tf.function(experimental_compile=True)
     def training(images, labels):
         with tf.GradientTape() as tape:
@@ -47,41 +48,30 @@ def Slimmable_optimizer(model, weight_decay, LR, min_rate):
         test_loss = tf.keras.metrics.Mean(name='test_loss')
         test_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(name='test_accuracy')
 
-
-
-    def forward(images, labels, width = None):
-        if width is not None:
-            predictions = model(images, training = True)
-            total_loss = tf.reduce_mean(tf.reduce_sum(tf.nn.softmax(labels)*(tf.nn.log_softmax(labels)
-                                                                            -tf.nn.log_softmax(predictions)), 1))
-        else:
-            predictions = model(images, training = True)
-            total_loss = loss_object(labels, predictions)
-        return total_loss, predictions
-
-
     @tf.function
     def training(images, labels):
         with tf.GradientTape() as tape:
-            total_loss, predictions = forward(images, labels)
-            inplace_distillation = tf.stop_gradient(predictions)
+            predictions = model(images, training = True)
+            total_loss = loss_object(labels, predictions)
+        gradients = tape.gradient(total_loss, model.trainable_variables)
 
-            width_list = tf.random.uniform([2], min_rate, 1.)
-            width_list = [tf.reshape(w,[]) for w in tf.split(width_list,2)] + [tf.constant(min_rate)]
-
-            for width in width_list:
+        in_dist = tf.stop_gradient(predictions)
+        n = 4
+        width_list = [tf.random.uniform([], min_rate, 1.) for _ in range(n-2)] + [tf.constant(min_rate)]
+        for width in width_list:
+            with tf.GradientTape() as tape:
+                #  In the author's repository, he uses the same width rate for all the layers, so I follow this rule.
                 for k in model.Layers.keys():
                     if getattr(model.Layers[k], 'type', False) != 'input':
                         model.Layers[k].in_depth = width
                     model.Layers[k].out_depth = width
-                tl, _ = forward(images, inplace_distillation, width)
-                for k in model.Layers.keys():
-                    if getattr(model.Layers[k], 'type', False) != 'input':
-                         delattr(model.Layers[k], 'in_depth')
-                    delattr(model.Layers[k], 'out_depth')
+                pred_sub = model(images, training = True)
+                loss_sub = tf.reduce_mean(tf.reduce_sum(tf.nn.softmax(in_dist)*(tf.nn.log_softmax(in_dist)
+                                                                               -tf.nn.log_softmax(pred_sub)), 1))
+            grad_sub = tape.gradient(loss_sub, model.trainable_variables)
+            gradients = [g + gs for g, gs in zip(gradients, grad_sub)]
+            slim_util.clear_width(model)
 
-                total_loss += tl
-        gradients = tape.gradient(total_loss, model.trainable_variables)
         if weight_decay > 0.:
             gradients = [g+v*weight_decay for g,v in zip(gradients, model.trainable_variables)]
         optimizer.apply_gradients(zip(gradients, model.trainable_variables))
