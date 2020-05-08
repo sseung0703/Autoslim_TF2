@@ -1,7 +1,6 @@
 # AutoSlim: Towards One-Shot Architecture Search for Channel Numbers with TF2
-- Implementation of Autoslim using Tensorflow2
-- At now, source code is almost verified, but it still has redundancy and low readability.
-- At now, I'm working with Mobilenet-v2, so other network architectures are not implemented fully.
+- Implementation of Autoslim using Tensorflow2.
+- Currently, only MobileNet-V2 is available, but I will be update other architectures.
 
 ## Note that
 - This repositories hyper-parameter setting is different from the authors' one due to lack of explanation or limitation of the hardware.
