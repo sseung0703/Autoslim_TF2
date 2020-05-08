@@ -20,11 +20,27 @@ python train_w_slimming.py --slimmable True
 ```
 ## Experimental results
 - I only use CIFAR10 dataset due to my low hardware performance.
+- Network configuration is different from the authors'. Therefore, baseline FLOPS and Params are different.
 - All the training configuration is probably not optimal.
+- All the numerical values and plots are the average of three results.
 
 ### MobileNet-v2 (will be uploaded soon)
-- Table and Plots...
-- Comparing original and slimmed networks' layer depths via Box plot.
+
+|             |  Accuracy |  FLOPS (M)  |  Params (M) |
+|:-----------:|:---------:|:-----------:|:-----------:|
+|   Baseline  |   92.73   |    82.56    |     2.27    |
+|   Autoslim  |   92.64   |    40.55    |     1.03    |
+
+
+<p align="center">
+  <img src="http://drive.google.com/uc?export=view&id=1FL8moebHl_08DZgBiYtVEOvp8JIlVbh6" width="400"><br>
+  <b>The test accuracy plot in Fine-tuning phase.</b>  
+</p>
+<p align="center">  
+  <img src="http://drive.google.com/uc?export=view&id=1gkyJC_9h1nqB0xNCb_Ccy9ogWREBOwFW" width="1000"><br>
+  <b>An example of slimmed network via Autoslim.</b>  
+</p>
+
 
 ## Reference
 ```
