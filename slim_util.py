@@ -75,7 +75,7 @@ def set_width(arch, model, width_list, actual = False):
                     Do = None
 
                 elif 'conv2' in k:
-                    if 'conv2' in k:
+                    if '0/conv2' in k:
                         group_width = width_list[w_num]
                         w_num += 1
 
