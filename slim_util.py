@@ -4,42 +4,141 @@ import scipy.io as sio
 import numpy as np
 import time
 
-def set_width(model, width_list):
-    w_num = 0
-    for k in model.Layers.keys():
-        layer = model.Layers[k]
-        if 'conv1' in k:
-            layer.in_depth = in_width
-            if k.replace('conv', 'bn') in model.Layers:
-                model.Layers[k.replace('conv', 'bn')].out_depth = in_width
-        elif 'conv2' in k:
-            if '0/conv2' in k:
-                width = width_list[w_num]
-                group_width = width
-                w_num += 1
+def get_initial_width(arch, model):
+    if arch == 'Mobilev2':
+        width_list = [1.0 for k in model.Layers.keys() if 'conv' in k and 'conv1' not in k and 'conv2' not in k]
+        width_list += [1.0 for k in model.Layers.keys() if '0/conv2' in k]
 
-            layer.in_depth  = in_width
-            layer.out_depth = group_width
-            if k.replace('conv', 'bn') in model.Layers:
-                model.Layers[k.replace('conv', 'bn')].out_depth = group_width
-            in_width = group_width
+    elif 'ResNet' in arch:
+        width_list = [1.0 for k in model.Layers.keys() if 'conv' in k and 'conv1' not in k]
+    return width_list
 
-        elif 'conv' in k:
-            width = width_list[w_num]
-            if layer.type == 'input':
-                layer.out_depth = width
+def set_slimmed_param(layer, attr, in_depth = None, out_depth = None, actual = False, trainable = False):    
+    if actual:
+        for a in attr:
+            if not(hasattr(layer, a)):
+                continue
+            tensor = getattr(layer, a).numpy()
+            name = getattr(layer, a).name
+
+            if 'fc' in name:
+                if in_depth is not None:
+                    tensor = tensor[:ceil(in_depth*tensor.shape[0])]
+         
+                if out_depth is not None:
+                    tensor = tensor[:,:ceil(out_depth*tensor.shape[1])]
+
             else:
-                layer.in_depth  = in_width
-                layer.out_depth = width
+                if in_depth is not None:
+                    tensor = tensor[:,:,:ceil(in_depth*tensor.shape[2])]
+         
+                if out_depth is not None:
+                    tensor = tensor[:,:,:,:ceil(out_depth*tensor.shape[3])]
 
-            if k.replace('conv', 'bn') in model.Layers:
-                model.Layers[k.replace('conv', 'bn')].out_depth = width
+            if hasattr(layer, 'in_mask'):
+                delattr(layer, 'in_mask')
+            if hasattr(layer, 'in_depth'):
+                delattr(layer, 'in_depth')
+            if hasattr(layer, 'out_mask'):
+                delattr(layer, 'out_mask')
+            if hasattr(layer, 'out_depth'):
+                delattr(layer, 'out_depth')
+            delattr(layer, a)
+            setattr(layer, a, tf.Variable(tensor, trainable = trainable, name = name[:-2]))
 
-            in_width = width
-            w_num += 1
+    else:
+        # In my experiments, the static execution is much faster than the eager execution eventhough it's FLOPS is larger than the eager.
+        # Therefore, I use a mask to implement slimmable tensor.
+        tensor = getattr(layer, attr[0])
+        name = getattr(layer, attr[0]).name
 
-        if 'fc' in k:
-            layer.in_depth  = in_width
+        if in_depth is not None:
+            Di = tensor.shape[-2]
+            if not(hasattr(layer, 'in_mask')):
+                layer.in_mask = tf.range(Di, dtype = tf.float32)
+            layer.in_depth = in_depth
+
+        if out_depth is not None:
+            Do = tensor.shape[-1]
+            if not(hasattr(layer, 'out_mask')):
+                layer.out_mask = tf.range(Do, dtype = tf.float32)
+            layer.out_depth = out_depth
+
+def set_width(arch, model, width_list, actual = False):
+    if arch == 'Mobilev2':
+        w_num = 0
+        for k in model.Layers.keys():
+            layer = model.Layers[k]
+            if 'conv' in k:
+                if 'conv1' in k:
+                    Di = in_width
+                    Do = None
+
+                elif 'conv2' in k:
+                    if 'conv2' in k:
+                        group_width = width_list[w_num]
+                        w_num += 1
+
+                    Di = in_width
+                    Do = group_width
+                    in_width = group_width
+
+                else:
+                    width = width_list[w_num]
+                    Di = None if layer.type == 'input' else in_width
+                    Do = width
+
+                    in_width = width
+                    w_num += 1
+
+                set_slimmed_param(layer, ['kernel', 'bias'], in_depth = Di, out_depth = Do, actual = actual, trainable = True)
+
+                if k.replace('conv', 'bn') in model.Layers:
+                    if 'conv1' in k:
+                        Do = Di
+                    bn = model.Layers[k.replace('conv', 'bn')]
+                    set_slimmed_param(bn, ['moving_mean', 'moving_variance'], out_depth = Do, actual = actual, trainable = False)
+                    set_slimmed_param(bn, ['gamma', 'beta'], out_depth = Do, actual = actual, trainable = True)
+
+            if 'fc' in k:
+                set_slimmed_param(layer, ['kernel', 'bias'], in_depth = Do, actual = actual, trainable = True)
+
+    if 'ResNet' in arch:
+        w_num = 0
+        for k in model.Layers.keys():
+            layer = model.Layers[k]          
+            if 'conv' in k:
+                if 'conv1' in k or 'conv2' in k:
+                    if 'conv2' in k:
+                        group_width = width_list[w_num]
+                        w_num += 1
+                    Di = in_width
+                    Do = group_width
+
+                    if 'conv1' in k:
+                        in_width = group_width
+                else:
+                    width = width_list[w_num]
+                    if layer.type == 'input':
+                        group_width = width
+                        Di = None
+                    else:
+                        Di = in_width
+                    Do = width
+
+                    in_width = width
+
+                    w_num += 1
+                set_slimmed_param(layer, ['kernel', 'bias'], in_depth = Di, out_depth = Do, actual = actual, trainable = True)
+
+                if k.replace('conv', 'bn') in model.Layers:
+                    bn = model.Layers[k.replace('conv', 'bn')]
+                    set_slimmed_param(bn, ['moving_mean', 'moving_variance'], out_depth = Do, actual = actual, trainable = False)
+                    set_slimmed_param(bn, ['gamma', 'beta'], out_depth = Do, actual = actual, trainable = True)
+
+            if 'fc' in k:
+                set_slimmed_param(layer, ['kernel', 'bias'], in_depth = Do, actual = actual, trainable = True)
+
 
 def clear_width(model):
     for k in model.Layers.keys():
@@ -48,164 +147,17 @@ def clear_width(model):
         if hasattr(model.Layers[k], 'out_depth'):
             delattr(model.Layers[k], 'out_depth')
 
-
 def check_complexity(model):
-    total_params = 0
-    total_flops = 0
+    total_params = []
+    total_flops = []
     for k in model.Layers.keys():
         layer = model.Layers[k]
         if hasattr(layer, 'params'):
-            total_params += layer.params
+            total_params.append(layer.params)
         if hasattr(layer, 'flops'):
-            total_flops += layer.flops
-    return total_params, total_flops
+            total_flops.append(layer.flops)
+    return tf.add_n(total_params).numpy(), tf.add_n(total_flops).numpy()
 
-def actual_slimming(model, width_list, path):
-    w_num = 0
-    params = {}
-
-    for k in model.Layers.keys():
-        layer = model.Layers[k]
-        if 'conv1' in k:
-            kernel = layer.kernel.numpy()
-            params[k + '/kernel:0'] = kernel[:,:,:in_width]
-
-            if layer.use_biases:
-                biases = layer.biases.numpy()
-                params[k + '/biases:0'] = biases
-
-            if k.replace('conv', 'bn') in model.Layers:
-                k_bn = k.replace('conv', 'bn') 
-                bn = model.Layers[k_bn]
-
-                mm = bn.moving_mean.numpy()
-                params[k_bn + '/moving_mean:0'] = mm[...,:in_width]
-                ms = bn.moving_std.numpy()
-                params[k_bn + '/moving_std:0'] = ms[...,:in_width]
-
-                if bn.scale:
-                    scale = bn.gamma.numpy()
-                    params[k_bn  + '/gamma:0'] = scale[...,:in_width]
-                if bn.center:
-                    center = bn.beta.numpy()
-                    params[k_bn  + '/beta:0'] = center[...,:in_width]
-                  
-
-        elif 'conv2' in k:
-            if '0/conv2' in k:
-                width = ceil(width_list[w_num]*layer.kernel.shape[-1])
-                group_width = width
-                w_num += 1
-
-            kernel = layer.kernel.numpy()
-            params[k + '/kernel:0'] = kernel[:,:,:in_width,:group_width]
-
-            if layer.use_biases:
-                biases = model.Layers[k].biases.numpy()
-                params[k + '/biases:0'] = biases[:,:,:group_width]
-
-            if k.replace('conv', 'bn') in model.Layers:
-                k_bn = k.replace('conv', 'bn') 
-                bn = model.Layers[k_bn]
-
-                mm = bn.moving_mean.numpy()
-                params[k_bn + '/moving_mean:0'] = mm[...,:group_width]
-                ms = bn.moving_std.numpy()
-                params[k_bn + '/moving_std:0'] = ms[...,:group_width]
-
-                if bn.scale:
-                    scale = bn.gamma.numpy()
-                    params[k_bn + '/gamma:0'] = scale[...,:group_width]
-                if bn.center:
-                    center = bn.beta.numpy()
-                    params[k_bn + '/beta:0'] = center[...,:group_width]
-            in_width = group_width
-
-        elif 'conv' in k:
-            kernel = layer.kernel.numpy()
-
-            width = int(width_list[w_num]*layer.kernel.shape[-1])
-            if layer.type == 'input':
-                in_width = kernel.shape[2]
-
-            params[k + '/kernel:0'] = kernel[:,:,:in_width,:width]
-
-            if layer.use_biases:
-                biases = model.Layers[k].biases.numpy()
-                params[k + '/biases:0'] = biases[:,:,:width]
-
-            if k.replace('conv', 'bn') in model.Layers:
-                k_bn = k.replace('conv', 'bn') 
-                bn = model.Layers[k_bn]
-
-                mm = bn.moving_mean.numpy()
-                params[k_bn + '/moving_mean:0'] = mm[...,:width]
-                ms = bn.moving_std.numpy()
-                params[k_bn + '/moving_std:0'] = ms[...,:width]
-
-                if bn.scale:
-                    scale = bn.gamma.numpy()
-                    params[k_bn + '/gamma:0'] = scale[...,:width]
-                if bn.center:
-                    center = bn.beta.numpy()
-                    params[k_bn + '/beta:0'] = center[...,:width]
-
-            in_width = width
-            w_num += 1
-
-        if 'fc' in k:
-            kernel = layer.kernel.numpy()
-            params[k + '/kernel:0'] = kernel[:in_width]
-            biases = layer.biases.numpy()
-            params[k + '/biases:0'] = biases
-
-    sio.savemat(path+'/slimmed_params.mat', params)
-    return params
-
-def assign_slimmed_param(model, new_param, trainable = False):
-    model_name = model.variables[0].name.split('/')[0] + '/'
-
-    for k in model.Layers.keys():
-        layer = model.Layers[k]
-        if 'conv' in k:
-            kernel = new_param[k + '/kernel:0']
-            delattr(layer, 'kernel')
-            setattr(layer, 'kernel', tf.Variable(kernel, trainable = trainable, name = model_name + k + '/kernel'))
-
-            if layer.use_biases:
-                biases = new_param[k + '/biases:0']
-                delattr(layer, 'biases')
-                setattr(layer, 'biases', tf.Variable(biases, trainable = trainable, name =  model_name + k + 'biases'))
-
-        if 'bn' in k:
-            mm = new_param[k + '/moving_mean:0']
-            delattr(layer, 'moving_mean')
-            setattr(layer, 'moving_mean', tf.Variable(mm, trainable = False, name =  model_name + k + '/moving_mean'))
-
-            ms = new_param[k + '/moving_std:0']
-            delattr(layer, 'moving_std')
-            setattr(layer, 'moving_std', tf.Variable(ms, trainable = False, name =  model_name + k + '/moving_std'))
-
-
-            if layer.scale:
-                gamma = new_param[k + '/gamma:0']
-                delattr(layer, 'gamma')
-                setattr(layer, 'gamma', tf.Variable(gamma, trainable = trainable, name =  model_name + k + '/gamma'))
-
-                beta = new_param[k + '/beta:0']
-                delattr(layer, 'beta')
-                setattr(layer, 'beta', tf.Variable(beta, trainable = trainable, name =  model_name + k + '/beta'))
-
-        if 'fc' in k:
-            kernel = new_param[k + '/kernel:0']
-            delattr(layer, 'kernel')
-            setattr(layer, 'kernel', tf.Variable(kernel, trainable = trainable, name =  model_name + k + '/kernel'))
-
-            if layer.use_biases:
-                biases = new_param[k + '/biases:0']
-                delattr(layer, 'biases')
-                setattr(layer, 'biases', tf.Variable(biases, trainable = trainable, name =  model_name + k + '/biases'))
-                
 def Warm_up(args, model, train_step, training_epoch, train_sub_ds, train_loss, train_accuracy,
             validation, test_step, val_ds, test_loss, test_accuracy):
     step = 0
@@ -226,25 +178,26 @@ def Warm_up(args, model, train_step, training_epoch, train_sub_ds, train_loss, t
         train_time += time.time() - val_time
         
 def Greedly_search(args, model, val_ds, test_step, test_accuracy, test_loss):
-    width_list = [1.0 for k in model.Layers.keys() if 'conv' in k and 'conv1' not in k and 'conv2' not in k]
-    width_list += [1.0 for k in model.Layers.keys() if '0/conv2' in k]
-    
+    width_list = get_initial_width(args.arch, model)
+    set_width(args.arch, model, width_list)
     for test_images, test_labels in val_ds:
-        test_step(test_images, test_labels, width_list = width_list, bn_statistics_update = True)
+        test_step(test_images, test_labels, bn_statistics_update = True)
     ori_acc = test_accuracy.result().numpy()
     test_loss.reset_states()
     test_accuracy.reset_states()
 
     ori_p, ori_f = check_complexity(model)
-    
     while(True):
         accuracy_list = []
         for i in range(len(width_list)):
             if width_list[i] > args.search_step:
                 width_list[i] -= args.search_step
+                set_width(args.arch, model, width_list)
+
                 for test_images, test_labels in val_ds:
-                    test_step(test_images, test_labels, width_list = width_list, bn_statistics_update = True)
+                    test_step(test_images, test_labels, bn_statistics_update = True)
                 accuracy_list.append(test_accuracy.result().numpy())
+
                 test_loss.reset_states()
                 test_accuracy.reset_states()
                 width_list[i] += args.search_step
@@ -254,17 +207,14 @@ def Greedly_search(args, model, val_ds, test_step, test_accuracy, test_loss):
         width_list[idx] -= args.search_step
         width_list = [round(w*10)/10 for w in width_list]
         print (width_list, idx)
-        set_width(model, width_list)
+        set_width(args, model, width_list)
         model(np.zeros([1]+list(test_images.shape[1:]), dtype=np.float32), training = False)
 
         p, f = check_complexity(model)
-        p, f = p.numpy(), f.numpy() 
         print ('Ori Acc.: %.2f, Current Acc.: %.2f'%(100*ori_acc, 100*max(accuracy_list)))
         print ('Ori params: %.4fM, Slim params: %.4fM, Ori FLOPS: %.4fM, Slim FLOPS: %.4fM'%(ori_p/1e6, p/1e6, ori_f/1e6, f/1e6))
         if f/ori_f < args.target_rate:
             break 
-    slimmed_param = actual_slimming(model, width_list, args.train_path)
-    assign_slimmed_param(model, slimmed_param, trainable = True)
-    clear_width(model)
+    set_width(args.arch, model, width_list, actual = True)
     return ori_p, ori_f, p, f
 

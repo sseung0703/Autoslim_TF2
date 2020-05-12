@@ -52,13 +52,15 @@ class Conv2d(tf.keras.layers.Layer):
         kernel = self.kernel
         kh,kw,Di,Do = kernel.shape
 
-        if getattr(self, 'in_depth', 1.) < 1.:
-            Di = tf.cast(tf.math.ceil(Di * getattr(self, 'in_depth')), tf.int32)
-            kernel = tf.slice(kernel, [0,0,0,0], [-1,-1,Di,-1])
-       
-        if getattr(self, 'out_depth', 1.) < 1.:
-            Do = tf.cast(tf.math.ceil(Do * getattr(self, 'out_depth')), tf.int32)
-            kernel = tf.slice(kernel, [0,0,0,0], [-1,-1,-1,Do])
+        if hasattr(self, 'in_depth'):
+            Di = tf.math.ceil(Di*self.in_depth)
+            in_mask = tf.cast(tf.less(self.in_mask, Di),tf.float32)
+            kernel = kernel * tf.reshape(in_mask, [1,1,kernel.shape[2],1])
+
+        if hasattr(self, 'out_depth'):
+            Do = tf.math.ceil(Do*self.out_depth)
+            out_mask = tf.cast(tf.less(self.out_mask, Do),tf.float32)
+            kernel = kernel * tf.reshape(out_mask, [1,1,1,kernel.shape[3]])
 
         conv = tf.nn.conv2d(input, kernel, self.strides, self.padding,
                             dilations=self.dilations, name=None)
@@ -66,7 +68,7 @@ class Conv2d(tf.keras.layers.Layer):
             biases = self.biases
             if getattr(self, 'out_depth', 1.) < 1.:
                 biases = tf.slice(kernel, [0,0,0,0], [-1,-1,-1,Do])
-
+                biases = biases * tf.reshape(out_mask, [1,1,1,kernel.shape[3]])
             conv += biases
         if self.activation_fn:
             conv = self.activation_fn(conv)
@@ -124,16 +126,16 @@ class DepthwiseConv2d(tf.keras.layers.Layer):
         kernel = self.kernel
         kh,kw,Di,Do = kernel.shape
 
-
-        if getattr(self, 'in_depth', 1.) < 1.:
-            Di = tf.cast(tf.math.ceil(Di * getattr(self, 'in_depth')), tf.int32)
-            kernel = tf.slice(kernel, [0,0,0,0], [-1,-1,Di,-1])
+        if hasattr(self, 'in_depth'):
+            Di = tf.math.ceil(Di*self.in_depth)
+            in_mask = tf.cast(tf.less(self.in_mask, Di),tf.float32)
+            kernel = kernel * tf.reshape(in_mask, [1,1,kernel.shape[2],1])
 
         conv = tf.nn.depthwise_conv2d(input, kernel, strides = self.strides, padding = self.padding, dilations=self.dilations)
         if self.use_biases:
             biases = self.biases
             if getattr(self, 'in_depth', 1.) < 1.:
-                biases = tf.slice(biases, [0,0,0,0], [-1,-1,-1,Di])
+                biases = biases * tf.reshape(in_mask, [1,1,1,kernel.shape[2]])
             conv += biases
         if self.activation_fn:
             conv = self.activation_fn(conv)
@@ -183,9 +185,10 @@ class FC(tf.keras.layers.Layer):
         kernel = self.kernel
         Di,Do = kernel.shape
 
-        if getattr(self, 'in_depth', 1.) < 1.:
-            Di = tf.cast(tf.math.ceil(Di * getattr(self, 'in_depth')), tf.int32)
-            kernel = tf.slice(kernel, [0,0], [Di,-1])
+        if hasattr(self, 'in_depth'):
+            Di = tf.math.ceil(Di*self.in_depth)
+            in_mask = tf.cast(tf.less(self.in_mask, Di),tf.float32)
+            kernel = kernel * tf.reshape(in_mask, [kernel.shape[0],1])
 
         fc = tf.matmul(input, kernel)
         if self.use_biases:
@@ -219,8 +222,8 @@ class BatchNorm(tf.keras.layers.Layer):
             param_initializers = {}
         if not(param_initializers.get('moving_mean')):
             param_initializers['moving_mean'] = tf.keras.initializers.Zeros()
-        if not(param_initializers.get('moving_std')):
-            param_initializers['moving_std'] = tf.keras.initializers.Ones()
+        if not(param_initializers.get('moving_variance')):
+            param_initializers['moving_variance'] = tf.keras.initializers.Ones()
         if not(param_initializers.get('gamma')) and scale:
             param_initializers['gamma'] = tf.keras.initializers.Ones()
         if not(param_initializers.get('beta')) and center:
@@ -235,16 +238,14 @@ class BatchNorm(tf.keras.layers.Layer):
         
         self.trainable = trainable
 
-
-
     def build(self, input_shape):
         super(BatchNorm, self).build(input_shape)
         self.moving_mean = self.add_weight(name  = 'moving_mean', trainable = False,
                                       shape = [1]*(len(input_shape)-1)+[int(input_shape[-1])],
                                       initializer=self.param_initializers['moving_mean'])
-        self.moving_std = self.add_weight(name  = 'moving_std', trainable = False,
+        self.moving_variance = self.add_weight(name  = 'moving_variance', trainable = False,
                                       shape = [1]*(len(input_shape)-1)+[int(input_shape[-1])],
-                                      initializer=self.param_initializers['moving_std'])
+                                      initializer=self.param_initializers['moving_variance'])
 
         if self.scale:
             self.gamma = self.add_weight(name  = 'gamma', 
@@ -261,41 +262,44 @@ class BatchNorm(tf.keras.layers.Layer):
         else:
             self.beta = 0.
             
-        self.mask = tf.range(input_shape[-1])
-
     def EMA(self, variable, value):
         update_delta = (variable - value) * (1-self.alpha)
         variable.assign(variable-update_delta)
         
     def call(self, input, training=None):
-        Do = self.moving_mean.shape[-1]
+
         if training:
             mean, var = tf.nn.moments(input, list(range(len(input.shape)-1)), keepdims=True)
             std = tf.sqrt(var + self.epsilon)
-            if self.moving_mean.shape[-1] == mean.shape[-1]:
+            ## In slimmable training, update moving statistics is useless.
+            if not(hasattr(self, 'out_depth')):
                 self.EMA(self.moving_mean, mean)
-                self.EMA(self.moving_std, std)
+                self.EMA(self.moving_variance, var)
         else:
             mean = self.moving_mean
-            std = self.moving_std
+            var = self.moving_variance
         gamma, beta = self.gamma, self.beta
 
-        if getattr(self, 'out_depth', 1.) < 1.:
-            Do = tf.cast(tf.math.ceil(Do * getattr(self, 'out_depth')), tf.int32)
-            if not(training):
-                mean = tf.slice(mean, [0,0,0,0], [-1,-1,-1,Do])
-                std = tf.slice(std, [0,0,0,0], [-1,-1,-1,Do])
-            gamma = tf.slice(self.gamma, [0,0,0,0], [-1,-1,-1,Do])
-            beta = tf.slice(self.beta, [0,0,0,0], [-1,-1,-1,Do])
+        Do = self.moving_mean.shape[-1]
+        if hasattr(self, 'out_depth'):
+            Do = tf.math.ceil(Do*self.out_depth)
+            out_mask = tf.cast(tf.less(self.out_mask, Do),tf.float32)
+            out_mask = tf.reshape(out_mask, [1]*(len(input.shape)-1)+[-1])
+            gamma = gamma * out_mask
+            beta = beta * out_mask
+            mean = mean * out_mask
+            var = var * out_mask
 
-        bn = (input-mean)/std*gamma + beta
+        bn = tf.nn.batch_normalization(input, mean, var, offset = beta, scale = gamma, variance_epsilon = self.epsilon)
 
         if self.activation_fn:
             bn = self.activation_fn(bn)
 
-        self.params = Do*(2 + self.scale + self.center)
+        self.params = Do * (2 + self.scale + self.center)
         self.flops  = self.params
         for n in bn.shape[1:-1]:
-            self.flops *= n 
+            self.flops *= n
 
         return bn
+
+

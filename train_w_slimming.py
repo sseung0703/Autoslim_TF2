@@ -26,6 +26,7 @@ parser.add_argument("--val_batch_size", default=2000, type=int)
 parser.add_argument("--train_epoch", default=200, type=int)
 
 parser.add_argument("--slimmable", default=False, type=bool)
+parser.add_argument("--trained_slimmable", type=str)
 parser.add_argument("--target_rate", default=.5, type=float)
 parser.add_argument("--search_step", default=.2, type=float)
 parser.add_argument("--minimum_rate", default=.2, type=float)
@@ -59,7 +60,7 @@ def validation(test_step, test_ds, test_loss, test_accuracy,
         tf.summary.scalar('Accuracy/test', test_accuracy.result()*100, step=epoch+1)
         tf.summary.scalar('learning_rate', lr, step=epoch)
 
-        template = 'Epoch: {0:3d}, train_loss: {1:0.4f}, train_Acc.: {2:2.2f}, val loss: {3:0.4f}, val_Acc.: {4:2.2f}'
+        template = 'Epoch: {0:3d}, train_loss: {1:0.4f}, train_Acc.: {2:2.2f}, val_loss: {3:0.4f}, val_Acc.: {4:2.2f}'
         print (template.format(epoch+1, train_loss.result(), train_accuracy.result()*100,
                                          test_loss.result(),  test_accuracy.result()*100))
 
@@ -81,7 +82,7 @@ def build_dataset_proviers(train_images, train_labels, val_images, val_labels, p
     test_ds = test_ds.batch(args.val_batch_size)
     test_ds = test_ds.cache().prefetch(tf.data.experimental.AUTOTUNE)
     
-    if args.slimmable:
+    if args.slimmable and args.trained_slimmable is None:
         num_train = train_images.shape[0]
         train_sub_ds = tf.data.Dataset.from_tensor_slices((train_images[:int(num_train*.8)], train_labels[:int(num_train*.8)])).cache()
         train_sub_ds = train_sub_ds.map(pre_processing(is_training = True),  num_parallel_calls=tf.data.experimental.AUTOTUNE)
@@ -116,11 +117,13 @@ if __name__ == '__main__':
                           name = 'Student', trainable = True)
     elif 'ResNet' in args.arch:
         arch = int(args.arch.split('-')[1])
-        model = ResNet.Model(num_layer=arch, num_class = np.max(train_labels)+1,
+        model = ResNet.Model(num_layers = arch, num_class = np.max(train_labels)+1,
                              name = 'Student', trainable = True)
     elif 'Mobilev2' in args.arch:
         model = Mobilev2.Model(num_class = np.max(train_labels)+1, width_mul = 1.0 if args.slimmable else 1.0,
                                name = 'Student', trainable = True)
+
+    model(np.zeros([1]+list(train_images.shape[1:]), dtype=np.float32), training = False)
 
     cardinality = tf.data.experimental.cardinality(datasets['train']).numpy()
     if args.decay_points is None:
@@ -133,24 +136,43 @@ if __name__ == '__main__':
 
     if args.slimmable:
         train_step, train_loss, train_accuracy,\
-        test_step,  test_loss,  test_accuracy = op_util.Slimmable_optimizer(model, args.weight_decay, args.learning_rate, args.minimum_rate)
+        test_step,  test_loss,  test_accuracy = op_util.Slimmable_optimizer(args, model, args.weight_decay, args.learning_rate)
     else:
         train_step, train_loss, train_accuracy,\
         test_step,  test_loss,  test_accuracy = op_util.Optimizer(model, args.weight_decay, LR)
-
-    model(np.zeros([1]+list(train_images.shape[1:]), dtype=np.float32), training = False)
 
     with summary_writer.as_default():
         step = 0
         logs = {'training_acc' : [], 'validation_acc' : []}
 
+        model_name = model.variables[0].name.split('/')[0]
         train_time = time.time()
         init_epoch = 0
+
         if args.slimmable:
             ## Warm-up training
-            slim_util.Warm_up(args, model, train_step, ceil(args.train_epoch *.3), datasets['train_sub'], 
-                              train_loss, train_accuracy, validation, test_step, datasets['val'], test_loss, test_accuracy)
+            if args.trained_slimmable is None:
+                print ('Warm-up training starts')            
+                slim_util.Warm_up(args, model, train_step, ceil(args.train_epoch *.3), datasets['train_sub'], 
+                                  train_loss, train_accuracy, validation, test_step, datasets['val'], test_loss, test_accuracy)
+                params = {}
+                for v in model.variables:
+                    params[v.name[len(model_name)+1:]] = v.numpy()
+
+                sio.savemat(args.train_path+'/slimmable_params.mat', params)
+                sio.savemat(args.train_path + '/log.mat',logs)
+
+            else:
+                model_name = model.variables[0].name.split('/')[0]
+                trained = sio.loadmat(args.trained_slimmable)
+                n = 0
+                for v in model.variables:
+                    v.assign(trained[v.name[len(model_name)+1:]])
+                    n += 1
+                print (n, 'params loaded')
+
             ## Greed search
+            print ('Greed searching starts')
             ori_p, ori_f, p, f = slim_util.Greedly_search(args, model, datasets['val'], test_step, test_accuracy, test_loss)
 
             ## Make new optimizer to use ordinary training scheme.
@@ -172,13 +194,12 @@ if __name__ == '__main__':
                        train_loss, train_accuracy, epoch = epoch, lr = lr, logs = logs, bn_statistics_update = False)
             train_time += time.time() - val_time
 
-        model_name = model.variables[0].name.split('/')[0]
+
         params = {}
         for v in model.variables:
             params[v.name[len(model_name)+1:]] = v.numpy()
 
         if args.slimmable:
-            p, f = slim_util.check_complexity(model)
             params['ORI_FLOPS'] = ori_f
             params['ORI_PARAMS'] = ori_p
             params['PRUNED_FLOPS'] = f

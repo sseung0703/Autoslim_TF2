@@ -7,6 +7,7 @@ class Model(tf.keras.Model):
         super(Model, self).__init__(name = name, **kwargs)
         def kwargs(**kwargs):
             return kwargs
+        ## In order to build slimmable network, I implement various neural layers which are in net/tcl.py. 
         setattr(tcl.Conv2d, 'pre_defined', kwargs(kernel_initializer = tf.keras.initializers.VarianceScaling(2, mode = 'fan_out'),
                                                   use_biases = False, activation_fn = None, trainable = trainable))
         setattr(tcl.DepthwiseConv2d, 'pre_defined', kwargs(kernel_initializer = tf.keras.initializers.VarianceScaling(2, mode = 'fan_out'),
@@ -30,7 +31,7 @@ class Model(tf.keras.Model):
         lastc = int(1280*self.width_mult) if self.width_mult > 1. else 1280
 
         self.Layers['conv'] = tcl.Conv2d([3,3], inc, strides = 1, name = 'conv', layertype = 'input')
-        self.Layers['bn']   = tcl.BatchNorm(name = 'bn')
+        self.Layers['bn'] = tcl.BatchNorm(name = 'bn')
 
         for i, (t, c, n, s) in enumerate(self.setting):
             outc = c * self.width_mult
@@ -39,18 +40,18 @@ class Model(tf.keras.Model):
                 name = 'InvertedResidual_%d_%d/'%(i,j)
                 with tf.name_scope(name): 
                     self.Layers[name + 'conv0'] = tcl.Conv2d([1,1], inc * t, name = name + 'conv0')
-                    self.Layers[name + 'bn0']   = tcl.BatchNorm(name = name + 'bn0')
+                    self.Layers[name + 'bn0'] = tcl.BatchNorm(name = name + 'bn0')
 
                     self.Layers[name + 'conv1'] = tcl.DepthwiseConv2d([3,3], strides = s if j == 0 else 1, name = name + 'conv1')
-                    self.Layers[name + 'bn1']   = tcl.BatchNorm(name = name + 'bn1')
+                    self.Layers[name + 'bn1'] = tcl.BatchNorm(name = name + 'bn1')
 
                     self.Layers[name + 'conv2'] = tcl.Conv2d([1,1], outc, name = name + 'conv2')
-                    self.Layers[name + 'bn2']   = tcl.BatchNorm(name = name + 'bn2')
+                    self.Layers[name + 'bn2'] = tcl.BatchNorm(name = name + 'bn2')
 
                     inc = outc
 
         self.Layers['conv_last'] = tcl.Conv2d([1,1], lastc, name = 'conv_last')
-        self.Layers['bn_last']   = tcl.BatchNorm(name = 'bn_last')
+        self.Layers['bn_last'] = tcl.BatchNorm(name = name + 'bn_last')
 
         self.Layers['fc'] = tcl.FC(num_class, name = 'fc')
     
@@ -58,9 +59,6 @@ class Model(tf.keras.Model):
         x = self.Layers['conv'](x)
         x = self.Layers['bn'](x, training = training)
         x = tf.nn.relu6(x)        
-
-        ## Source codes are fixed. If you want to confirm network is training with various width, uncomments below line.
-        #tf.print(getattr(self.Layers['conv'], 'out_depth', 1.))
 
         for i, (t, c, n, s) in enumerate(self.setting):
             for j in range(n):
@@ -88,4 +86,4 @@ class Model(tf.keras.Model):
         x = tf.reduce_mean(x,[1,2])
         x = self.Layers['fc'](x)
         return x
-    
+
