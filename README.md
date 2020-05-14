@@ -49,7 +49,7 @@ python train_w_slimming.py --arch WResnet-40-4 --slimmable True --weight_decay 5
 |             |  Accuracy |  FLOPS (M)  |  Params (M) |
 |:-----------:|:---------:|:-----------:|:-----------:|
 |   Baseline  |   95.72   |    82.56    |     2.27    |[download](http://drive.google.com/uc?export=view&id=1UdG2JvSm3gnbSTz7MaLT3EdtOLEHiB9_)  |
-|   Autoslim  |   92.78   |    40.79    |     1.05    |[download](http://drive.google.com/uc?export=view&id=1IOYK6OGL38s6xfpSqAoXIVLyg2sA9HfE)  |
+|   Autoslim  |   95.58   |    40.79    |     1.05    |[download](http://drive.google.com/uc?export=view&id=1IOYK6OGL38s6xfpSqAoXIVLyg2sA9HfE)  |
 
 <p align="center">
   <img src="figs/wrn404_plots.png" width="300">
