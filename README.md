@@ -52,8 +52,8 @@ python train_w_slimming.py --arch WResnet-40-4 --slimmable True --weight_decay 5
 |   Autoslim  |   92.78   |    40.79    |     1.05    |[download](http://drive.google.com/uc?export=view&id=1IOYK6OGL38s6xfpSqAoXIVLyg2sA9HfE)  |
 
 <p align="center">
-  <img src="figs/mobilev2_plots.png" width="300">
-  <img src="figs/mobilev2_depths.png" width="500"><br>
+  <img src="figs/wrn404_plots.png" width="300">
+  <img src="figs/wrn404_depths.png" width="500"><br>
   <b>An example of slimmed network via Autoslim.</b>  
 </p>
 
@@ -67,8 +67,8 @@ python train_w_slimming.py --arch Resnet-56 --slimmable True --weight_decay 5e-4
 |   Autoslim  |   93.59   |    62.64    |    0.4964   |[download](http://drive.google.com/uc?export=view&id=1TqQILaIJ7NpV1Q-Pv3kn3gNIHF9Bk2nY)  |
 
 <p align="center">
-  <img src="figs/mobilev2_plots.png" width="300">
-  <img src="figs/mobilev2_depths.png" width="500"><br>
+  <img src="figs/res56_plots.png" width="300">
+  <img src="figs/res56_depths.png" width="500"><br>
   <b>An example of slimmed network via Autoslim.</b>  
 </p>
 
