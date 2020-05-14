@@ -46,8 +46,8 @@ python train_w_slimming.py --arch Mobilev2 --slimmable True
 ```
 python train_w_slimming.py --arch WResnet-40-4 --slimmable True --weight_decay 5e-4
 ```
-|             |  Accuracy |  FLOPS (M)  |  Params (M) |
-|:-----------:|:---------:|:-----------:|:-----------:|
+|             |  Accuracy |  FLOPS (M)  |  Params (M) |Model |
+|:-----------:|:---------:|:-----------:|:-----------:|-------|
 |   Baseline  |   95.72   |    82.56    |     2.27    |[download](http://drive.google.com/uc?export=view&id=1UdG2JvSm3gnbSTz7MaLT3EdtOLEHiB9_)  |
 |   Autoslim  |   95.58   |    40.79    |     1.05    |[download](http://drive.google.com/uc?export=view&id=1IOYK6OGL38s6xfpSqAoXIVLyg2sA9HfE)  |
 
@@ -61,8 +61,8 @@ python train_w_slimming.py --arch WResnet-40-4 --slimmable True --weight_decay 5
 ```
 python train_w_slimming.py --arch Resnet-56 --slimmable True --weight_decay 5e-4
 ```
-|             |  Accuracy |  FLOPS (M)  |  Params (M) |
-|:-----------:|:---------:|:-----------:|:-----------:|
+|             |  Accuracy |  FLOPS (M)  |  Params (M) |Model |
+|:-----------:|:---------:|:-----------:|:-----------:|-------|
 |   Baseline  |   93.91   |   127.93    |    0.8600   |[download](http://drive.google.com/uc?export=view&id=1dSYUBu1gsToWgBS9M1r4l7o9dwWYOS4D)  |
 |   Autoslim  |   93.59   |    62.64    |    0.4964   |[download](http://drive.google.com/uc?export=view&id=1TqQILaIJ7NpV1Q-Pv3kn3gNIHF9Bk2nY)  |
 
