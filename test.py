@@ -13,14 +13,13 @@ import slim_util
 home_path = os.path.dirname(os.path.abspath(__file__))
 parser = argparse.ArgumentParser(description='')
 
-parser.add_argument("--train_path", default="test", type=str)
 parser.add_argument("--arch", default='Mobilev2', type=str)
 parser.add_argument("--dataset", default="cifar10", type=str)
 
 parser.add_argument("--val_batch_size", default=2000, type=int)
 parser.add_argument("--trained_param", type=str)
 
-parser.add_argument("--slimmable", default=True, type=bool)
+parser.add_argument("--slimmable", default=False, type=bool)
 
 parser.add_argument("--gpu_id", default=0, type=int)
 args = parser.parse_args()
@@ -48,8 +47,8 @@ if __name__ == '__main__':
                                   name = 'VGG', trainable = True)
     elif 'ResNet' in args.arch:
         arch = int(args.arch.split('-')[1])
-        model = ResNet.Model(num_layer=arch, num_class = np.max(train_labels)+1,
-                                  name = 'ResNet', trainable = True)
+        model = ResNet.Model(num_layers=arch, num_class = np.max(train_labels)+1,
+                             name = 'ResNet', trainable = True)
     elif 'Mobilev2' in args.arch:
         model = Mobilev2.Model(num_class = np.max(train_labels)+1, width_mul = 1.0 if args.slimmable else 1.0,
                                        name = 'Mobilev2', trainable = True)
@@ -57,9 +56,24 @@ if __name__ == '__main__':
     _,_,_, test_step,  test_loss,  test_accuracy = op_util.Optimizer(model, 0., 0.)
     model(np.zeros([1]+list(train_images.shape[1:]), dtype=np.float32), training = False)
     
-    trained = sio.loadmat(args.trained_param+ '/trained_params.mat')
+    trained = sio.loadmat(args.trained_param)
+    model_name = model.variables[0].name.split('/')[0]
     if args.slimmable:
-        slim_util.assign_slimmed_param(model, trained, trainable = False)
+        for k in model.Layers.keys():
+            layer = model.Layers[k]
+            if 'conv' in k or 'fc' in k:
+                layer.kernel = tf.Variable(trained[layer.kernel.name[len(model_name)+1:]], trainable = False, name = layer.kernel.name[:-2])
+                if layer.use_biases:
+                    layer.biases = tf.Variable(trained[layer.biases.name[len(model_name)+1:]], trainable = False, name = layer.biases.name[:-2])
+                    
+            elif 'bn' in k:
+                layer.moving_mean = tf.Variable(trained[layer.moving_mean.name[len(model_name)+1:]], trainable = False, name = layer.moving_mean.name[:-2])
+                layer.moving_variance = tf.Variable(trained[layer.moving_variance.name[len(model_name)+1:]], trainable = False, name = layer.moving_variance.name[:-2])
+                if layer.scale:
+                    layer.gamma = tf.Variable(trained[layer.gamma.name[len(model_name)+1:]], trainable = False, name = layer.gamma.name[:-2])
+                if layer.center:
+                    layer.beta = tf.Variable(trained[layer.beta.name[len(model_name)+1:]], trainable = False, name = layer.beta.name[:-2])
+            
     else:
         n = 0
         model_name = model.variables[0].name.split('/')[0]
@@ -70,9 +84,10 @@ if __name__ == '__main__':
 
     for test_images, test_labels in test_ds:
         test_step(test_images, test_labels)
-    slim_util.clear_width(model)
     ori_acc = test_accuracy.result().numpy()
     test_loss.reset_states()
     test_accuracy.reset_states()
+    print ('Test ACC. :', ori_acc)
+    
 
 

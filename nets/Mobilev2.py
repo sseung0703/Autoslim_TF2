@@ -38,17 +38,16 @@ class Model(tf.keras.Model):
 
             for j in range(n):
                 name = 'InvertedResidual_%d_%d/'%(i,j)
-                with tf.name_scope(name): 
-                    self.Layers[name + 'conv0'] = tcl.Conv2d([1,1], inc * t, name = name + 'conv0')
-                    self.Layers[name + 'bn0'] = tcl.BatchNorm(name = name + 'bn0')
+                self.Layers[name + 'conv0'] = tcl.Conv2d([1,1], inc * t, name = name + 'conv0')
+                self.Layers[name + 'bn0'] = tcl.BatchNorm(name = name + 'bn0')
 
-                    self.Layers[name + 'conv1'] = tcl.DepthwiseConv2d([3,3], strides = s if j == 0 else 1, name = name + 'conv1')
-                    self.Layers[name + 'bn1'] = tcl.BatchNorm(name = name + 'bn1')
+                self.Layers[name + 'conv1'] = tcl.DepthwiseConv2d([3,3], strides = s if j == 0 else 1, name = name + 'conv1')
+                self.Layers[name + 'bn1'] = tcl.BatchNorm(name = name + 'bn1')
 
-                    self.Layers[name + 'conv2'] = tcl.Conv2d([1,1], outc, name = name + 'conv2')
-                    self.Layers[name + 'bn2'] = tcl.BatchNorm(name = name + 'bn2')
+                self.Layers[name + 'conv2'] = tcl.Conv2d([1,1], outc, name = name + 'conv2')
+                self.Layers[name + 'bn2'] = tcl.BatchNorm(name = name + 'bn2')
 
-                    inc = outc
+                inc = outc
 
         self.Layers['conv_last'] = tcl.Conv2d([1,1], lastc, name = 'conv_last')
         self.Layers['bn_last'] = tcl.BatchNorm(name = name + 'bn_last')

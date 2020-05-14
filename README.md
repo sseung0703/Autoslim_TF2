@@ -32,31 +32,53 @@ python train_w_slimming.py --arch "archtecture name" --slimmable True --argument
 ```
 python train_w_slimming.py --arch Mobilev2 --slimmable True
 ```
-|             |  Accuracy |  FLOPS (M)  |  Params (M) |
-|:-----------:|:---------:|:-----------:|:-----------:|
-|   Baseline  |   92.73   |    82.56    |     2.27    |
-|   Autoslim  |   92.78   |    40.79    |     1.05    |
-
+|             |  Accuracy |  FLOPS (M)  |  Params (M) | Model |
+|:-----------:|:---------:|:-----------:|:-----------:|-------|
+|   Baseline  |   92.84   |    82.56    |     2.27    |[download](http://drive.google.com/uc?export=view&id=1JY7ST4S-VOaHLs5w-J6i-Hr3DEn3Or3C)  |
+|   Autoslim  |   92.83   |    40.83    |     0.93    |[download](http://drive.google.com/uc?export=view&id=17-KcV3ADUIhf1wtRDKGzUsmWh5m517qV)  |
 <p align="center">
-  <img src="http://drive.google.com/uc?export=view&id=1FL8moebHl_08DZgBiYtVEOvp8JIlVbh6" width="400"><br>
+  <img src="figs/mobilev2_plots.png" width="400"><br>
   <b>The test accuracy plot in Fine-tuning phase.</b>  
 </p>
 <p align="center">  
-  <img src="http://drive.google.com/uc?export=view&id=1gkyJC_9h1nqB0xNCb_Ccy9ogWREBOwFW" width="1000"><br>
+  <img src="figs/mobilev2_depths.png" width="1000"><br>
   <b>An example of slimmed network via Autoslim.</b>  
 </p>
-
 ### WResNet40-4
 ```
 python train_w_slimming.py --arch WResnet-40-4 --slimmable True --weight_decay 5e-4
 ```
--  Will be announced soon.
+|             |  Accuracy |  FLOPS (M)  |  Params (M) |
+|:-----------:|:---------:|:-----------:|:-----------:|
+|   Baseline  |   95.72   |    82.56    |     2.27    |[download](http://drive.google.com/uc?export=view&id=1UdG2JvSm3gnbSTz7MaLT3EdtOLEHiB9_)  |
+|   Autoslim  |   92.78   |    40.79    |     1.05    |[download](http://drive.google.com/uc?export=view&id=1IOYK6OGL38s6xfpSqAoXIVLyg2sA9HfE)  |
+
+<p align="center">
+  <img src="figs/mobilev2_plots.png" width="400"><br>
+  <b>The test accuracy plot in Fine-tuning phase.</b>  
+</p>
+<p align="center">  
+  <img src="figs/mobilev2_depths.png" width="1000"><br>
+  <b>An example of slimmed network via Autoslim.</b>  
+</p>
 
 ### ResNet56
 ```
 python train_w_slimming.py --arch Resnet-56 --slimmable True --weight_decay 5e-4
 ```
--  Will be announced soon.
+|             |  Accuracy |  FLOPS (M)  |  Params (M) |
+|:-----------:|:---------:|:-----------:|:-----------:|
+|   Baseline  |   93.91   |   127.93    |    0.8600   |[download](http://drive.google.com/uc?export=view&id=1dSYUBu1gsToWgBS9M1r4l7o9dwWYOS4D)  |
+|   Autoslim  |   93.59   |    62.64    |    0.4964   |[download](http://drive.google.com/uc?export=view&id=1TqQILaIJ7NpV1Q-Pv3kn3gNIHF9Bk2nY)  |
+
+<p align="center">
+  <img src="figs/mobilev2_plots.png" width="400"><br>
+  <b>The test accuracy plot in Fine-tuning phase.</b>  
+</p>
+<p align="center">  
+  <img src="figs/mobilev2_depths.png" width="1000"><br>
+  <b>An example of slimmed network via Autoslim.</b>  
+</p>
 
 ## Reference
 ```
