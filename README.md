@@ -1,10 +1,10 @@
 # AutoSlim: Towards One-Shot Architecture Search for Channel Numbers with TF2
 - Implementation of Autoslim using Tensorflow2.
 - Slimmable layers are implemented by masking, so they can be run in static mode, which is much faster than eager execution.
+- WResNet, ResNet, and MobileNet-v2 are available, and you can find their trained parameter in each link.
 
 ## Updates
-- I change the mode from eager to static execution, which makes the training time more than twice faster.
-- WResNet and ResNet are implemented. The experimental results will be announced.
+- The experimental results and trained parameters of WResnet, ResNet, and MobileNet-v2 are uploaded.
 
 ## Note that
 - This repositories hyper-parameter setting is different from the authors' one due to the limitation of the hardware.
