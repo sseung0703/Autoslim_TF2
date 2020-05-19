@@ -30,7 +30,7 @@ python train_w_slimming.py --arch "archtecture name" --slimmable True --argument
 - The target FLOPS rate is set to 0.5.
 ### MobileNet-v2
 ```
-python train_w_slimming.py --arch Mobilev2 --slimmable True
+python train_w_slimming.py --arch Mobilev2 --slimmable True --weight_decay 4e-5
 ```
 |             |  Accuracy |  FLOPS (M)  |  Params (M) | Model |
 |:-----------:|:---------:|:-----------:|:-----------:|-------|
