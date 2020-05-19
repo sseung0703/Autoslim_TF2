@@ -7,8 +7,6 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 from dataloader import Dataloader
 import op_util
 from nets import WResNet, VGG, ResNet, Mobilev2
-#from nets import Multiple
-import slim_util
 
 home_path = os.path.dirname(os.path.abspath(__file__))
 parser = argparse.ArgumentParser(description='')
@@ -89,5 +87,6 @@ if __name__ == '__main__':
     test_accuracy.reset_states()
     print ('Test ACC. :', ori_acc)
     
+
 
 

@@ -30,13 +30,13 @@ def Optimizer(model, weight_decay, LR):
         return optimizer._decayed_lr(var_dtype = tf.float32)
         
     @tf.function(experimental_compile=True)
-    def validation(images, labels):
+    def testing(images, labels):
         predictions = model(images, training = False)
         loss = loss_object(labels, predictions)
         
         test_loss.update_state(loss)
         test_accuracy.update_state(labels, predictions)
-    return training, train_loss, train_accuracy, validation, test_loss, test_accuracy
+    return training, train_loss, train_accuracy, testing, test_loss, test_accuracy
 
 def Slimmable_optimizer(args, model, weight_decay, LR):
     with tf.name_scope('Optimizer_w_Distillation'):
@@ -53,7 +53,8 @@ def Slimmable_optimizer(args, model, weight_decay, LR):
         min_width = [args.minimum_rate for w in range(len(full_width))]
         slim_util.set_width(args.arch, model, full_width)
 
-    def training_min_max(images, labels):
+    def training_(images, labels):
+        slim_util.set_width(args.arch, model, full_width)
         with tf.GradientTape() as tape:
             predictions = model(images, training = True)
             total_loss = loss_object(labels, predictions)
@@ -62,19 +63,8 @@ def Slimmable_optimizer(args, model, weight_decay, LR):
             gradients = [g+v*weight_decay for g,v in zip(gradients, model.trainable_variables)]
         in_dist = tf.stop_gradient(predictions)
         
-        slim_util.set_width(args.arch, model, min_width)
-        with tf.GradientTape() as tape:
-            pred_sub = model(images, training = True)
-            loss_sub = tf.reduce_mean(tf.reduce_sum(tf.nn.softmax(in_dist)*(tf.nn.log_softmax(in_dist)
-                                                                           -tf.nn.log_softmax(pred_sub)), 1))
-        grad_sub = tape.gradient(loss_sub, model.trainable_variables)
-        gradients = [g + gs for g, gs in zip(gradients, grad_sub)]
-        return in_dist, total_loss, gradients
-
-
-    def training_random_width(images, in_dist, gradients):
         width_list = [[tf.random.uniform([],args.minimum_rate, 1.) for _ in range(len(min_width))] for _ in range(n-2)]
-        for width in width_list:
+        for width in width_list + [min_width]:
             slim_util.set_width(args.arch, model, width)
             with tf.GradientTape() as tape:
                 pred_sub = model(images, training = True)
@@ -82,22 +72,18 @@ def Slimmable_optimizer(args, model, weight_decay, LR):
                                                                                -tf.nn.log_softmax(pred_sub)), 1))
             grad_sub = tape.gradient(loss_sub, model.trainable_variables)
             gradients = [g + gs for g, gs in zip(gradients, grad_sub)]
-        return gradients
-
+        return predictions, total_loss, gradients
 
     @tf.function(experimental_compile=True)
     def training(images, labels):
-        in_dist, total_loss, gradients = training_min_max(images, labels)
-        gradients = training_random_width(images, in_dist, gradients)
-
+        pred, total_loss, gradients = training_(images, labels)
         optimizer.apply_gradients(zip(gradients, model.trainable_variables))
-        
-        slim_util.clear_width(model)
         train_loss.update_state(total_loss)
-        train_accuracy.update_state(labels, in_dist)
+        train_accuracy.update_state(labels, pred)
 
         return optimizer._decayed_lr(var_dtype = tf.float32)
         
+    @tf.function(experimental_compile=True)
     def validation(images, labels, bn_statistics_update = False):
         predictions = model(images, training = bn_statistics_update)
         loss = loss_object(labels, predictions)

@@ -71,28 +71,39 @@ def validation(test_step, test_ds, test_loss, test_accuracy,
     train_accuracy.reset_states()
     test_accuracy.reset_states()
 
-def build_dataset_proviers(train_images, train_labels, val_images, val_labels, pre_processing, slimmable = False):
+def build_dataset_proviers(train_images, train_labels, test_images, test_labels, pre_processing, slimmable = False):
     train_ds = tf.data.Dataset.from_tensor_slices((train_images, train_labels)).cache()
     train_ds = train_ds.map(pre_processing(is_training = True),  num_parallel_calls=tf.data.experimental.AUTOTUNE)
-    train_ds = train_ds.shuffle(100*args.batch_size).batch(args.batch_size)
-    train_ds = train_ds.prefetch(tf.data.experimental.AUTOTUNE)
+    train_ds = train_ds.shuffle(100*args.batch_size).batch(args.batch_size).prefetch(tf.data.experimental.AUTOTUNE)
 
-    test_ds = tf.data.Dataset.from_tensor_slices((val_images, val_labels))
+    test_ds = tf.data.Dataset.from_tensor_slices((test_images, test_labels))
     test_ds = test_ds.map(pre_processing(is_training = False), num_parallel_calls=tf.data.experimental.AUTOTUNE)
-    test_ds = test_ds.batch(args.val_batch_size)
-    test_ds = test_ds.cache().prefetch(tf.data.experimental.AUTOTUNE)
-    
-    if args.slimmable and args.trained_slimmable is None:
-        num_train = train_images.shape[0]
-        train_sub_ds = tf.data.Dataset.from_tensor_slices((train_images[:int(num_train*.8)], train_labels[:int(num_train*.8)])).cache()
-        train_sub_ds = train_sub_ds.map(pre_processing(is_training = True),  num_parallel_calls=tf.data.experimental.AUTOTUNE)
-        train_sub_ds = train_sub_ds.shuffle(100*args.batch_size).batch(args.batch_size)
-        train_sub_ds = train_sub_ds.prefetch(tf.data.experimental.AUTOTUNE)
+    test_ds = test_ds.batch(args.val_batch_size).cache().prefetch(tf.data.experimental.AUTOTUNE)
 
-        val_ds = tf.data.Dataset.from_tensor_slices((train_images[int(num_train*.8):], train_labels[int(num_train*.8):])).cache()
+    if args.slimmable:
+        num_train = train_images.shape[0]
+        num_label = np.max(train_labels)+1
+
+        train_sub = np.vstack([train_images[np.where(train_labels[:,0] == i)][:int(num_train/num_label*.8)] for i in range(num_label)])
+        val       = np.vstack([train_images[np.where(train_labels[:,0] == i)][int(num_train/num_label*.8):] for i in range(num_label)])
+        train_sub_lb = np.vstack([train_labels[np.where(train_labels[:,0] == i)][:int(num_train/num_label*.8)] for i in range(num_label)])
+        val_lb       = np.vstack([train_labels[np.where(train_labels[:,0] == i)][int(num_train/num_label*.8):] for i in range(num_label)])
+
+        sub_idx = np.random.choice(train_sub.shape[0], train_sub.shape[0], replace = False)
+        train_sub = train_sub[sub_idx]
+        train_sub_lb = train_sub_lb[sub_idx]
+
+        sub_idx = np.random.choice(val.shape[0], val.shape[0], replace = False)
+        val = val[sub_idx]
+        val_lb = val_lb[sub_idx]
+
+        train_sub_ds = tf.data.Dataset.from_tensor_slices((train_sub, train_sub_lb)).cache()
+        train_sub_ds = train_sub_ds.map(pre_processing(is_training = True),  num_parallel_calls=tf.data.experimental.AUTOTUNE)
+        train_sub_ds = train_sub_ds.shuffle(100*args.batch_size).batch(args.batch_size).prefetch(tf.data.experimental.AUTOTUNE)
+
+        val_ds = tf.data.Dataset.from_tensor_slices((val, val_lb))
         val_ds = val_ds.map(pre_processing(is_training = False), num_parallel_calls=tf.data.experimental.AUTOTUNE)
-        val_ds = val_ds.batch(args.val_batch_size)
-        val_ds = val_ds.cache().prefetch(tf.data.experimental.AUTOTUNE)
+        val_ds = val_ds.batch(args.val_batch_size).cache().prefetch(tf.data.experimental.AUTOTUNE)
         return {'train': train_ds, 'test': test_ds, 'train_sub': train_sub_ds, 'val': val_ds}
     return {'train': train_ds, 'test': test_ds}
 
@@ -105,8 +116,9 @@ if __name__ == '__main__':
     
     summary_writer = tf.summary.create_file_writer(args.train_path)
     
-    train_images, train_labels, val_images, val_labels, pre_processing = Dataloader(args.dataset, '')
-    datasets = build_dataset_proviers(train_images, train_labels, val_images, val_labels, pre_processing, slimmable = args.slimmable)
+    train_images, train_labels, test_images, test_labels, pre_processing = Dataloader(args.dataset, '')
+    datasets = build_dataset_proviers(train_images, train_labels, test_images, test_labels, pre_processing, slimmable = args.slimmable)
+    args.input_size = list(train_images.shape[1:])
     
     if 'WResNet' in args.arch:
         arch = [int(a) for a in args.arch.split('-')[1:]]
@@ -123,7 +135,7 @@ if __name__ == '__main__':
         model = Mobilev2.Model(num_class = np.max(train_labels)+1, width_mul = 1.0 if args.slimmable else 1.0,
                                name = 'Student', trainable = True)
 
-    model(np.zeros([1]+list(train_images.shape[1:]), dtype=np.float32), training = False)
+    model(np.zeros([1]+args.input_size, dtype=np.float32), training = False)
 
     cardinality = tf.data.experimental.cardinality(datasets['train']).numpy()
     if args.decay_points is None:
@@ -148,16 +160,16 @@ if __name__ == '__main__':
         model_name = model.variables[0].name.split('/')[0]
         train_time = time.time()
         init_epoch = 0
-
         if args.slimmable:
             ## Warm-up training
-            if args.trained_slimmable is None:
+            if args.trained_slimmable is None or 'None' in args.trained_slimmable:
                 print ('Warm-up training starts')            
                 slim_util.Warm_up(args, model, train_step, ceil(args.train_epoch *.3), datasets['train_sub'], 
                                   train_loss, train_accuracy, validation, test_step, datasets['val'], test_loss, test_accuracy)
                 params = {}
                 for v in model.variables:
-                    params[v.name[len(model_name)+1:]] = v.numpy()
+                    if model_name in v.name:
+                        params[v.name[len(model_name)+1:]] = v.numpy()
 
                 sio.savemat(args.train_path+'/slimmable_params.mat', params)
                 sio.savemat(args.train_path + '/log.mat',logs)
@@ -167,8 +179,9 @@ if __name__ == '__main__':
                 trained = sio.loadmat(args.trained_slimmable)
                 n = 0
                 for v in model.variables:
-                    v.assign(trained[v.name[len(model_name)+1:]])
-                    n += 1
+                    if model_name in v.name:
+                        v.assign(trained[v.name[len(model_name)+1:]])
+                        n += 1
                 print (n, 'params loaded')
 
             ## Greed search
@@ -194,10 +207,10 @@ if __name__ == '__main__':
                        train_loss, train_accuracy, epoch = epoch, lr = lr, logs = logs, bn_statistics_update = False)
             train_time += time.time() - val_time
 
-
         params = {}
         for v in model.variables:
-            params[v.name[len(model_name)+1:]] = v.numpy()
+            if model_name in v.name:
+                params[v.name[len(model_name)+1:]] = v.numpy()
 
         if args.slimmable:
             params['ORI_FLOPS'] = ori_f

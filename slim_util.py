@@ -55,14 +55,18 @@ def set_slimmed_param(layer, attr, in_depth = None, out_depth = None, actual = F
         if in_depth is not None:
             Di = tensor.shape[-2]
             if not(hasattr(layer, 'in_mask')):
+                setattr(layer, 'in_depth', tf.Variable(1., trainable = False))
                 layer.in_mask = tf.range(Di, dtype = tf.float32)
-            layer.in_depth = in_depth
+            else:
+                layer.in_depth.assign(in_depth)
 
         if out_depth is not None:
             Do = tensor.shape[-1]
             if not(hasattr(layer, 'out_mask')):
+                setattr(layer, 'out_depth', tf.Variable(1., trainable = False))
                 layer.out_mask = tf.range(Do, dtype = tf.float32)
-            layer.out_depth = out_depth
+            else:
+                layer.out_depth.assign(out_depth)
 
 def set_width(arch, model, width_list, actual = False):
     if arch == 'Mobilev2':
@@ -125,10 +129,9 @@ def set_width(arch, model, width_list, actual = False):
                     else:
                         Di = in_width
                     Do = width
-
                     in_width = width
-
                     w_num += 1
+
                 set_slimmed_param(layer, ['kernel', 'bias'], in_depth = Di, out_depth = Do, actual = actual, trainable = True)
 
                 if k.replace('conv', 'bn') in model.Layers:
@@ -139,13 +142,12 @@ def set_width(arch, model, width_list, actual = False):
             if 'fc' in k:
                 set_slimmed_param(layer, ['kernel', 'bias'], in_depth = Do, actual = actual, trainable = True)
 
-
 def clear_width(model):
     for k in model.Layers.keys():
         if hasattr(model.Layers[k], 'in_depth'):
-            delattr(model.Layers[k], 'in_depth')
+            delattr(model.Layers[k],'in_depth')
         if hasattr(model.Layers[k], 'out_depth'):
-            delattr(model.Layers[k], 'out_depth')
+            delattr(model.Layers[k],'out_depth')
 
 def check_complexity(model):
     total_params = []
@@ -153,10 +155,16 @@ def check_complexity(model):
     for k in model.Layers.keys():
         layer = model.Layers[k]
         if hasattr(layer, 'params'):
-            total_params.append(layer.params)
+            p = layer.params
+            if not(isinstance(p, int)):
+                p = p.numpy()
+            total_params.append(p)
         if hasattr(layer, 'flops'):
-            total_flops.append(layer.flops)
-    return tf.add_n(total_params).numpy(), tf.add_n(total_flops).numpy()
+            f = layer.flops
+            if not(isinstance(f, int)):
+                f = f.numpy()
+            total_flops.append(f)
+    return sum(total_params), sum(total_flops)
 
 def Warm_up(args, model, train_step, training_epoch, train_sub_ds, train_loss, train_accuracy,
             validation, test_step, val_ds, test_loss, test_accuracy):
@@ -176,45 +184,53 @@ def Warm_up(args, model, train_step, training_epoch, train_sub_ds, train_loss, t
                    train_loss, train_accuracy, epoch = epoch, bn_statistics_update = True)
 
         train_time += time.time() - val_time
-        
-def Greedly_search(args, model, val_ds, test_step, test_accuracy, test_loss):
+       
+def Greedly_search(args, model, val_ds, test_step, test_accuracy, test_loss):   
     width_list = get_initial_width(args.arch, model)
     set_width(args.arch, model, width_list)
+
+    model(np.zeros([1]+args.input_size, dtype=np.float32), training = False)
+    ori_p, ori_f = check_complexity(model)
+
     for test_images, test_labels in val_ds:
-        test_step(test_images, test_labels, bn_statistics_update = True)
+        test_step(test_images, test_labels, True)
     ori_acc = test_accuracy.result().numpy()
-    test_loss.reset_states()
     test_accuracy.reset_states()
 
-    ori_p, ori_f = check_complexity(model)
+    step = 1    
     while(True):
         accuracy_list = []
         for i in range(len(width_list)):
-            if width_list[i] > args.search_step:
+            if width_list[i] > args.minimum_rate:
                 width_list[i] -= args.search_step
                 set_width(args.arch, model, width_list)
-
                 for test_images, test_labels in val_ds:
-                    test_step(test_images, test_labels, bn_statistics_update = True)
-                accuracy_list.append(test_accuracy.result().numpy())
-
-                test_loss.reset_states()
+                    test_step(test_images, test_labels, True)
+                acc = test_accuracy.result().numpy()
+                test_accuracy.reset_states()
+                accuracy_list.append(acc)
                 test_accuracy.reset_states()
                 width_list[i] += args.search_step
             else:
                 accuracy_list.append(0.)
-        idx = np.argmax(np.where(np.array(width_list) > args.minimum_rate, accuracy_list, 0.))
+        idx = np.argmax(np.where(np.array(width_list) > args.minimum_rate, accuracy_list, 0))
+        cur_acc = accuracy_list[idx]
+
+
         width_list[idx] -= args.search_step
         width_list = [round(w*10)/10 for w in width_list]
         print (width_list, idx)
-        set_width(args, model, width_list)
-        model(np.zeros([1]+list(test_images.shape[1:]), dtype=np.float32), training = False)
 
+        set_width(args, model, width_list)
+        model(np.zeros([1]+args.input_size, dtype=np.float32), training = False)
         p, f = check_complexity(model)
-        print ('Ori Acc.: %.2f, Current Acc.: %.2f'%(100*ori_acc, 100*max(accuracy_list)))
+
+        print ('Ori Acc.: %.2f, Current Acc.: %.2f'%(100*ori_acc, 100*cur_acc))
         print ('Ori params: %.4fM, Slim params: %.4fM, Ori FLOPS: %.4fM, Slim FLOPS: %.4fM'%(ori_p/1e6, p/1e6, ori_f/1e6, f/1e6))
+
         if f/ori_f < args.target_rate:
             break 
-    set_width(args.arch, model, width_list, actual = True)
-    return ori_p, ori_f, p, f
 
+    set_width(args.arch, model, width_list, actual = True)
+
+    return ori_p, ori_f, p, f
