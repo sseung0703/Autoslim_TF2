@@ -4,7 +4,7 @@
 - WResNet, ResNet, and MobileNet-v2 are available, and you can find their trained parameter in each link.
 
 ## Updates
-- The experimental results and trained parameters of WResnet, ResNet, and MobileNet-v2 are uploaded.
+- Gradients aggregated SGD is implemented for memory efficiency.
 
 ## Note that
 - This repositories hyper-parameter setting is different from the authors' one due to the limitation of the hardware.
@@ -15,7 +15,7 @@ We study how to set channel numbers in a neural network to achieve better accura
 ## Requirements
 - Tensorflow > 2.0
 - Scipy
-- about 10 GB GPU memory
+- more than 5 GB GPU memory
 
 ## Run
 ```
