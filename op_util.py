@@ -77,7 +77,7 @@ def Slimmable_optimizer(args, model, weight_decay, LR):
                 pred_sub = model(images, training = True)
                 loss_sub = tf.reduce_mean(tf.reduce_sum(id_soft*(id_log_soft-tf.nn.log_softmax(pred_sub)), 1))
 
-            gradidents = tape.gradient(loss_sub, model.trainable_variables)
+            gradients = tape.gradient(loss_sub, model.trainable_variables)
             optimizer.aggregate_grad(gradients, model.trainable_variables)
 
         optimizer.apply_grad(model.trainable_variables)
