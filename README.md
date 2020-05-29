@@ -29,9 +29,11 @@ python train_w_slimming.py --arch "archtecture name" --slimmable True --argument
 - All the numerical values and plots are the average of three results.
 - The target FLOPS rate is set to 0.5.
 ### MobileNet-v2
+
 ```
 python train_w_slimming.py --arch Mobilev2 --slimmable True --weight_decay 4e-5
 ```
+
 |             |  Accuracy |  FLOPS (M)  |  Params (M) | Model |
 |:-----------:|:---------:|:-----------:|:-----------:|-------|
 |   Baseline  |   92.84   |    82.56    |     2.27    |[download](http://drive.google.com/uc?export=view&id=17-KcV3ADUIhf1wtRDKGzUsmWh5m517qV)  |
@@ -44,9 +46,12 @@ python train_w_slimming.py --arch Mobilev2 --slimmable True --weight_decay 4e-5
   <b>An example of slimmed network via Autoslim.</b>  
 </p>
 ### WResNet40-4
+
 ```
 python train_w_slimming.py --arch WResnet-40-4 --slimmable True --weight_decay 5e-4
 ```
+
+
 |             |  Accuracy |  FLOPS (M)  |  Params (M) |Model |
 |:-----------:|:---------:|:-----------:|:-----------:|-------|
 |   Baseline  |   95.72   |    1306.97    |     8.97    |[download](http://drive.google.com/uc?export=view&id=1UdG2JvSm3gnbSTz7MaLT3EdtOLEHiB9_)  |
@@ -59,9 +64,12 @@ python train_w_slimming.py --arch WResnet-40-4 --slimmable True --weight_decay 5
   <b>An example of slimmed network via Autoslim.</b>  
 </p>
 ### ResNet56
+
 ```
 python train_w_slimming.py --arch Resnet-56 --slimmable True --weight_decay 5e-4
 ```
+
+
 |             |  Accuracy |  FLOPS (M)  |  Params (M) |Model |
 |:-----------:|:---------:|:-----------:|:-----------:|-------|
 |   Baseline  |   93.91   |   127.93    |    0.8600   |[download](http://drive.google.com/uc?export=view&id=1dSYUBu1gsToWgBS9M1r4l7o9dwWYOS4D)  |
