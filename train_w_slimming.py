@@ -37,12 +37,8 @@ args = parser.parse_args()
 
 def validation(test_step, test_ds, test_loss, test_accuracy,
                train_loss = None, train_accuracy = None, epoch = None, lr = None, logs = None, bn_statistics_update = False):
-    if bn_statistics_update:
-        for test_images, test_labels in test_ds:
-            test_step(test_images, test_labels, bn_statistics_update = bn_statistics_update)
-    else:
-        for test_images, test_labels in test_ds:
-            test_step(test_images, test_labels)
+    for test_images, test_labels in test_ds:
+        test_step(test_images, test_labels, bn_statistics_update = bn_statistics_update)
 
     if logs == None:
         tf.summary.scalar('Warmup/Categorical_loss/train', train_loss.result(), step=epoch+1)
