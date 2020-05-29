@@ -34,29 +34,30 @@ python train_w_slimming.py --arch Mobilev2 --slimmable True --weight_decay 4e-5
 ```
 |             |  Accuracy |  FLOPS (M)  |  Params (M) | Model |
 |:-----------:|:---------:|:-----------:|:-----------:|-------|
-|   Baseline  |   92.84   |    82.56    |     2.27    |[download](http://drive.google.com/uc?export=view&id=1JY7ST4S-VOaHLs5w-J6i-Hr3DEn3Or3C)  |
-|   Autoslim  |   92.83   |    40.83    |     0.93    |[download](http://drive.google.com/uc?export=view&id=17-KcV3ADUIhf1wtRDKGzUsmWh5m517qV)  |
+|   Baseline  |   92.84   |    82.56    |     2.27    |[download](http://drive.google.com/uc?export=view&id=17-KcV3ADUIhf1wtRDKGzUsmWh5m517qV)  |
+|   Autoslim(50)  |   92.83   |    40.83    |     0.93    |[download](http://drive.google.com/uc?export=view&id=17-KcV3ADUIhf1wtRDKGzUsmWh5m517qV)  |
+|   Autoslim(30)  |   92.47   |    24.34    |     0.52    |[download](http://drive.google.com/uc?export=view&id=1Wn4WagMuEqXYJYIbj8rCHaPPwi2EOxSN)  |
+
 <p align="center">
   <img src="figs/mobilev2_plots.png" width="300">
   <img src="figs/mobilev2_depths.png" width="500"><br>
   <b>An example of slimmed network via Autoslim.</b>  
 </p>
-
 ### WResNet40-4
 ```
 python train_w_slimming.py --arch WResnet-40-4 --slimmable True --weight_decay 5e-4
 ```
 |             |  Accuracy |  FLOPS (M)  |  Params (M) |Model |
 |:-----------:|:---------:|:-----------:|:-----------:|-------|
-|   Baseline  |   95.72   |    82.56    |     2.27    |[download](http://drive.google.com/uc?export=view&id=1UdG2JvSm3gnbSTz7MaLT3EdtOLEHiB9_)  |
-|   Autoslim  |   95.58   |    40.79    |     1.05    |[download](http://drive.google.com/uc?export=view&id=1IOYK6OGL38s6xfpSqAoXIVLyg2sA9HfE)  |
+|   Baseline  |   95.72   |    1306.97    |     8.97    |[download](http://drive.google.com/uc?export=view&id=1UdG2JvSm3gnbSTz7MaLT3EdtOLEHiB9_)  |
+|   Autoslim(50)  |   95.58   |    646.74    |     5.68    |[download](http://drive.google.com/uc?export=view&id=1IOYK6OGL38s6xfpSqAoXIVLyg2sA9HfE)  |
+|   Autoslim(30)  |   95.49   |    474.69    |     3.81    |[download](http://drive.google.com/uc?export=view&id=1HG0bp-mk9x3gUl_ThU1xthezgAbPOh4c)  |
 
 <p align="center">
   <img src="figs/wrn404_plots.png" width="300">
   <img src="figs/wrn404_depths.png" width="500"><br>
   <b>An example of slimmed network via Autoslim.</b>  
 </p>
-
 ### ResNet56
 ```
 python train_w_slimming.py --arch Resnet-56 --slimmable True --weight_decay 5e-4
@@ -64,7 +65,8 @@ python train_w_slimming.py --arch Resnet-56 --slimmable True --weight_decay 5e-4
 |             |  Accuracy |  FLOPS (M)  |  Params (M) |Model |
 |:-----------:|:---------:|:-----------:|:-----------:|-------|
 |   Baseline  |   93.91   |   127.93    |    0.8600   |[download](http://drive.google.com/uc?export=view&id=1dSYUBu1gsToWgBS9M1r4l7o9dwWYOS4D)  |
-|   Autoslim  |   93.59   |    62.64    |    0.4964   |[download](http://drive.google.com/uc?export=view&id=1TqQILaIJ7NpV1Q-Pv3kn3gNIHF9Bk2nY)  |
+|   Autoslim(50)  |   93.59   |    62.64    |    0.4964   |[download](http://drive.google.com/uc?export=view&id=1TqQILaIJ7NpV1Q-Pv3kn3gNIHF9Bk2nY)  |
+|   Autoslim(30)  |   92.67   |    37.52    |    0.3208   |[download](http://drive.google.com/uc?export=view&id=1WnNBjOfTpzfSYuRvZALxwdApX95yaUtJ)  |
 
 <p align="center">
   <img src="figs/res56_plots.png" width="300">
