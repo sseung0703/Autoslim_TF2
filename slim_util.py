@@ -221,7 +221,7 @@ def Greedly_search(args, model, val_ds, test_step, test_accuracy, test_loss):
         width_list = [round(w*10)/10 for w in width_list]
         print (width_list, idx)
 
-        set_width(args, model, width_list)
+        set_width(args.arch, model, width_list)
         model(np.zeros([1]+args.input_size, dtype=np.float32), training = False)
         p, f = check_complexity(model)
 
